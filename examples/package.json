@@ -1,0 +1,49 @@
+{
+  "name": "elm-table",
+  "version": "1.0.0",
+  "description": "ELM table examples",
+  "author": "Gribouille",
+  "license": "MPL-2.0",
+  "keywords": [
+    "elm",
+    "table",
+    "javascript",
+    "font-awesome",
+    "sass",
+    "bootstrap",
+    "start kit"
+  ],
+  "bugs": {
+    "url": "https://github.com/gribouille/elm-table/issues"
+  },
+  "homepage": "https://github.com/gribouille/elm-table",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/gribouille/elm-table.git"
+  },
+  "scripts": {
+    "dist": "webpack",
+    "dev": "webpack-dev-server --watch --debug --progress --hot",
+    "repl": "elm-repl",
+    "test": "elm-test"
+  },
+  "devDependencies": {
+    "copy-webpack-plugin": "^4.4.1",
+    "css-loader": "^0.28.9",
+    "elm-webpack-loader": "^4.4.0",
+    "html-webpack-plugin": "^2.30.1",
+    "node-sass": "^4.7.2",
+    "sass-loader": "^6.0.6",
+    "style-loader": "^0.20.2",
+    "uglifyjs-webpack-plugin": "^1.2.0",
+    "webpack": "^3.11.0",
+    "webpack-dev-server": "^2.11.1"
+  },
+  "dependencies": {
+    "bootstrap": "^4.0.0",
+    "font-awesome": "^4.7.0",
+    "jquery": "^3.2.1",
+    "popper.js": "^1.13.0"
+  }
+}
