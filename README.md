@@ -1,5 +1,7 @@
 # elm-table
-ELM Bootstrap 4 table ready to use.
+ELM Bootstrap 4 table ready to use  ([live demo](https://gribouille.github.io/demos/elm-table/1.0.0)).
+
+<p align="center"><img src="./features.gif" /></p>
 
 Features:
 - rows filtering
@@ -8,11 +10,8 @@ Features:
 - columns sorting
 - custom cells and colums rendering
 
-![elm-table][./features.gif]
+<p align="center"><img src="./capture.png" /></p>
 
-![elm-table][./capture.png]
-
-Live demo [here](https://gribouille.github.io/demos/elm-table/1.0.0).
 
 Inspired from:  
 - [elm-sortable-table](https://github.com/evancz/elm-sortable-table) 
@@ -56,10 +55,10 @@ See the documentation [here](http://package.elm-lang.org/packages/gribouille/elm
 
 ## TODO
 
-- [ ]: pagination
-- [ ]: ajax loading
-- [ ]: rewrite examples/webpack.config.js
-- [ ]: rewrite ELM module documentation
+- [ ] pagination
+- [ ] ajax loading
+- [ ] rewrite examples/webpack.config.js
+- [ ] rewrite ELM module documentation
 
 
 ## Contributing
