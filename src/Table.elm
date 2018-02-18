@@ -7,15 +7,23 @@ module Table exposing (..)
 For usage example, see [here](https://github.com/gribouille/elm-table). 
 
 ## Model
-@docs State, Row, getSelectedRows, initState, initRows
+@docs State, Row, getSelectedRows, initState, initRows, RowId, hideColumn
+@docs selectAllRows, sortRows, sortRowsFromStatus
 
 ## Configuration
 @docs Config, Column, ColumnInternal, SortStatus, ToolbarConfig, ActionConfig 
 @docs nextSortStatus, defaultFooter, checkboxColumn, invisibleColumn
-@docs stringColumn, stringWidthColumn, customColumn, actionDefault,
+@docs stringColumn, stringWidthColumn, customColumn, actionDefault
+@docs ColumnName, checkRowState, showColumn
 
 ## View
-@docs view
+@docs view, toolbarView, toolbarViewSearch, viewCellCheckbox, viewCellInvisible 
+@docs viewCellText, viewColumnCheckbox, viewColumnHide, viewColumnString 
+@docs viewDefaultAction, viewSelectColumns, viewSelectColumnsItem, viewTable 
+@docs viewTableBody, viewTableBodyRow, viewTableHead, viewTableHeadItemSort
+
+## Other
+@docs maybe, onClickEvent, optional, sort, sortLink
 -}
 
 import Html as H
@@ -31,8 +39,10 @@ import Dict
 -- MODEL
 --
 
-
+{-| -}
 type alias ColumnName = String
+
+{-| -}
 type alias RowId      = String
 
 
@@ -102,7 +112,7 @@ type alias Config a msg =
 type Column a msg = Column (ColumnInternal a msg)
 
 
-{-
+{-|
   sortable  : could be sortable
   indexable : indexable for search filtering
   hidable   : selectColumns options must be true
@@ -138,7 +148,7 @@ type alias ToolbarConfig msg =
 type ActionConfig msg = ActionConfig (State -> H.Html msg)
 
 
-{- Get the next sort status
+{-| Get the next sort status
 
       ↕ --> ↓ --> ↑
             ^-----|
@@ -262,7 +272,7 @@ view config state rows =
     , viewTable config state currentRows
     ]
 
-
+{-| -}
 toolbarView : Config a msg -> State -> H.Html msg
 toolbarView {pipe, columns, toolbar} state =
   H.form [ HA.class "d-flex toolbar" ] <| List.concat
@@ -271,7 +281,7 @@ toolbarView {pipe, columns, toolbar} state =
   , [ optional toolbar.selectColumns (viewSelectColumns columns pipe state) ]
   ]
 
-
+{-| -}
 toolbarViewSearch : (State -> msg) -> State -> H.Html msg
 toolbarViewSearch pipe state =
   H.input
@@ -280,7 +290,7 @@ toolbarViewSearch pipe state =
   , HA.class "form-control"
   , HA.placeholder "Search..."] []
 
-
+{-| -}
 viewSelectColumns : List (Column a msg) -> (State -> msg) -> State -> H.Html msg
 viewSelectColumns columns pipe state =
   H.div [ HA.class "dropdown" ]
@@ -295,7 +305,7 @@ viewSelectColumns columns pipe state =
     <| List.filter (\(Column col) -> col.hidable) columns
   ]
 
-
+{-| -}
 viewSelectColumnsItem : ColumnInternal a msg -> (State -> msg) -> State -> H.Html msg
 viewSelectColumnsItem col pipe state =
   let
@@ -315,16 +325,17 @@ viewSelectColumnsItem col pipe state =
         H.span [ HA.class "text-success" ] [ H.i [ HA.class "fa fa-check-square-o fa-fw" ] [] ]
     ]
 
+{-| -}
 hideColumn : String -> State -> State
 hideColumn name state =
   { state | hidedColumns = name :: state.hidedColumns }
 
-
+{-| -}
 showColumn : String -> State -> State
 showColumn name state =
   { state | hidedColumns = List.filter ((/=) name) state.hidedColumns }
 
-
+{-| -}
 viewTable : Config a msg -> State -> List (Row a) -> H.Html msg
 viewTable config state rows =
   let
@@ -338,7 +349,7 @@ viewTable config state rows =
   , config.footerView
   ]
 
-
+{-| -}
 viewTableHead : List (ColumnInternal a msg) -> (State -> msg) -> State -> H.Html msg
 viewTableHead columns pipe state =
   H.thead []
@@ -353,7 +364,7 @@ viewTableHead columns pipe state =
     ) columns
   ]
 
-
+{-| -}
 viewTableHeadItemSort : SortStatus -> ColumnName -> (State -> msg) -> State -> H.Html msg
 viewTableHeadItemSort status =
   case status of
@@ -361,7 +372,7 @@ viewTableHeadItemSort status =
     Descending  -> sortLink "fa fa-fw fa-sort-desc" "#7a7a7f"
     Ascending   -> sortLink "fa fa-fw fa-sort-asc"  "#7a7a7f"
 
-
+{-| -}
 sortLink : String -> String -> ColumnName -> (State -> msg) -> State -> H.Html msg
 sortLink cls color name pipe state =
   let
@@ -371,12 +382,12 @@ sortLink cls color name pipe state =
     H.a [ HA.href "#" , onClickEvent clickMsg ]
     [ H.span [ HA.style [("color", color)] ] [ H.i [ HA.class cls ] [] ] ]
 
-
+{-| -}
 viewTableBody : List (ColumnInternal a msg) -> (a -> String) -> (State -> msg) -> State -> List (Row a) -> H.Html msg
 viewTableBody columns getRowId pipe state rows =
   H.tbody [] <| List.map (viewTableBodyRow columns getRowId pipe state) rows
 
-
+{-| -}
 viewTableBodyRow : List (ColumnInternal a msg) -> (a -> String) -> (State -> msg) -> State -> Row a -> H.Html msg
 viewTableBodyRow columns getRowId pipe state (Row data) =
   H.tr [] <| List.map (\col-> H.td [] <| col.cellView data pipe state) columns
@@ -384,16 +395,17 @@ viewTableBodyRow columns getRowId pipe state (Row data) =
 
 -- Column views
 
+{-| -}
 viewColumnHide : (State -> msg) -> State -> List (H.Html msg)
 viewColumnHide _ _ =
   [ H.text "" ]
 
-
+{-| -}
 viewColumnString : String -> (State -> msg) -> State -> List (H.Html msg)
 viewColumnString name _ _ =
   [ H.text name ]
 
-
+{-| -}
 viewColumnCheckbox : (State -> msg) -> State -> List (H.Html msg)
 viewColumnCheckbox pipe state =
   [ H.input
@@ -402,7 +414,7 @@ viewColumnCheckbox pipe state =
     ] []
   ]
 
-
+{-| -}
 selectAllRows : State -> Bool -> State
 selectAllRows state value =
   { state | selected = Dict.map (\_ _ -> value) state.selected }
@@ -410,15 +422,16 @@ selectAllRows state value =
 
 -- Cell views
 
+{-| -}
 viewCellInvisible : a -> (State -> msg) -> State -> List (H.Html msg)
 viewCellInvisible _ _ _ = []
 
-
+{-| -}
 viewCellText : (a -> String) -> a -> (State -> msg) -> State -> List (H.Html msg)
 viewCellText toStr data _ _ =
   [ H.text (toStr data) ]
 
-
+{-| -}
 viewCellCheckbox : (a -> String) -> a -> (State -> msg) -> State -> List (H.Html msg)
 viewCellCheckbox toStr data pipe state =
   [ H.input
@@ -428,12 +441,14 @@ viewCellCheckbox toStr data pipe state =
     ] []
   ]
 
+{-| -}
 checkRowState : String -> State -> Bool -> State
 checkRowState id state value =
    { state | selected = Dict.insert id value state.selected}
 
 -- Actions
 
+{-| -}
 viewDefaultAction : String -> String -> String -> msg -> (State -> H.Html msg)
 viewDefaultAction bsColor faIcon tooltip actionMsg =
   (\_ ->
@@ -450,15 +465,16 @@ viewDefaultAction bsColor faIcon tooltip actionMsg =
 -- UTILS
 --
 
+{-| -}
 maybe : Bool -> a -> Maybe a
 maybe cond val = if cond then Just val else Nothing
 
-
+{-| -}
 onClickEvent : msg -> H.Attribute msg
 onClickEvent evt = HE.onWithOptions "click"
   { stopPropagation = True,  preventDefault = True } (Decode.succeed evt)
 
-
+{-| -}
 optional : Bool -> H.Html msg -> H.Html msg
 optional cond comp = if cond then comp else H.text ""
 
@@ -479,7 +495,7 @@ sort columns state rows =
       Nothing   -> rows
       Just func -> sortRowsFromStatus columnStatus func rows
 
-
+{-| -}
 sortRowsFromStatus : SortStatus -> (a -> String) -> List (Row a) -> List (Row a)
 sortRowsFromStatus status getValue rows =
   case status of
@@ -487,7 +503,7 @@ sortRowsFromStatus status getValue rows =
     Descending -> sortRows getValue rows
     Ascending  -> List.reverse (sortRows getValue rows)
 
-
+{-| -}
 sortRows : (a -> String) -> List (Row a) -> List (Row a)
 sortRows getValue rows =
   List.sortBy (\(Row data) -> getValue data) rows
