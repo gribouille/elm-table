@@ -1,48 +1,34 @@
 # elm-table
-ELM Bootstrap 4 table ready to use  ([live demo](https://gribouille.github.io/demos/elm-table/1.0.0)).
 
-<p align="center"><img src="./features.gif" /></p>
-
-Features:
-- rows filtering
-- rows selection
-- toolbar
-- columns sorting
-- custom cells and colums rendering
-
-<p align="center"><img src="./capture.png" /></p>
-
-
-Inspired from:  
-- [elm-sortable-table](https://github.com/evancz/elm-sortable-table) 
-- [Boostrap Table](http://bootstrap-table.wenzhixin.net.cn/).
+ELM table component v2 (in progress...).
 
 
 ## Usage
 
-Install bootstrap:
+Install the ELM package and the NPM package for the styles:
+
 ```
-npm install --save bootstrap@">=4.0.0"
+> elm install gribouille/elm-table
+> npm install elm-table
 ```
 
-Install the ELM package:
-```
-elm-package install gribouille/elm-table
-```
+Include the SASS styles from `node_modules/elm-table/styles/style.scss`.
 
-Include the [styles](./styles/table.scss) in your projects.
 
+```
+```
 
 ## Example
 
 To start the examples in dev mode:
 ```
-cd examples
-npm install
-npm run dev
+> cd examples
+> npm install
+> npm run server
+> npm run dev
 ```
 
-Open [http://localhost:8080](http://localhost:8080).
+Open [http://localhost:3000](http://localhost:3000).
 
 To build the examples:
 ```
@@ -53,17 +39,12 @@ npm run dist
 
 See the documentation [here](http://package.elm-lang.org/packages/gribouille/elm-table/latest).
 
-## TODO
-
-- [ ] pagination
-- [ ] ajax loading
-- [ ] rewrite examples/webpack.config.js
-- [ ] rewrite ELM module documentation
 
 
 ## Contributing
 
 Feedback and contributions are very welcome.
+
 
 
 ## License

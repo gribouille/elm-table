@@ -1,509 +1,757 @@
-module Table exposing (..)
-
--- TODO: restrict public interface
-
-{-| A customizable ELM Bootstrap Table component.
-
-For usage example, see [here](https://github.com/gribouille/elm-table). 
-
-## Model
-@docs State, Row, getSelectedRows, initState, initRows, RowId, hideColumn
-@docs selectAllRows, sortRows, sortRowsFromStatus
-
-## Configuration
-@docs Config, Column, ColumnInternal, SortStatus, ToolbarConfig, ActionConfig 
-@docs nextSortStatus, defaultFooter, checkboxColumn, invisibleColumn
-@docs stringColumn, stringWidthColumn, customColumn, actionDefault
-@docs ColumnName, checkRowState, showColumn
-
-## View
-@docs view, toolbarView, toolbarViewSearch, viewCellCheckbox, viewCellInvisible 
-@docs viewCellText, viewColumnCheckbox, viewColumnHide, viewColumnString 
-@docs viewDefaultAction, viewSelectColumns, viewSelectColumnsItem, viewTable 
-@docs viewTableBody, viewTableBodyRow, viewTableHead, viewTableHeadItemSort
-
-## Other
-@docs maybe, onClickEvent, optional, sort, sortLink
--}
-
-import Html as H
-import Html.Attributes as HA
-import Html.Events as HE
-import Json.Decode as Decode
-import List.Extra as LE
-import Dict exposing (Dict)
-import Dict
-
-
---
--- MODEL
---
-
-{-| -}
-type alias ColumnName = String
-
-{-| -}
-type alias RowId      = String
-
-
-{-| State for internal messages. -}
-type alias State =
-  { sortedColumn : (ColumnName, SortStatus)   -- msg to sort a column
-  , selected     : Dict String Bool           -- msg to select one row
-  , search       : String                     -- msg to filter rows
-  , hidedColumns : List ColumnName            -- msg to hide column
-  }
-
-
-{-| Embed the data with row states. -}
-type Row a = Row a
-
-
-{-| Return the selected rows of table. -}
-getSelectedRows : (a -> String) -> State -> List (Row a) -> List a
-getSelectedRows toId state rows =
-  List.map (\(Row d) -> d)
-  <| List.filter (\(Row d) ->
-      Maybe.withDefault False (Dict.get (toId d) state.selected)
-    ) rows
-
-
-{-| Initialize the table state. -}
-initState : State
-initState =
-  { sortedColumn = ("", StandBy)
-  , selected     = Dict.empty
-  , search       = ""
-  , hidedColumns = []
-  }
-
-
-{-| Helper to create multiple rows. -}
-initRows : (a -> String) -> List a -> (State, List (Row a))
-initRows getRowId values  =
-  let
-    state = initState
-  in
-    ( { state | selected = Dict.fromList (List.map (\v -> (getRowId v, False)) values) }
-    , List.map Row values
+module Table exposing
+    ( Config, Data, Pipe, Row, Rows(..), State, Status(..), init, loaded
+    , Column, Pagination, Sort(..), col, colI, colS, errorDefaultView, pagination, withWidth
+    , view, viewHeader, withViewCell
     )
 
+{-| Table component (in progress...).
 
---
--- CONFIGURATION
---
 
-{-| Configuration of table.
+# Data
 
-Table --- msg ---> Parent
-        ( pipe )
+@docs Config, Data, Pipe, Row, Rows, State, Status, init, loaded
 
+
+# Column
+
+@docs Column, Pagination, Sort, col, colI, colS, errorDefaultView, pagination, withWidth
+
+
+# View
+
+@docs view, viewHeader, withViewCell
+
+-}
+
+import Array
+import Html exposing (..)
+import Html.Attributes exposing (..)
+import Html.Events exposing (onCheck, onClick, onInput)
+import Http exposing (Error)
+import Internal.Util exposing (..)
+
+
+{-| TODO
+-}
+type Status a
+    = Loading
+    | Loaded a
+    | Failed String Error
+
+
+{-| TODO
+-}
+type Sort
+    = Ascending
+    | Descending
+    | StandBy
+
+
+{-| TODO
+-}
+type Rows a
+    = Static (List (Row a))
+    | Dynamic (Status (Data a))
+
+
+{-| TODO
+-}
+type alias Data a =
+    { total : Int
+    , rows : List (Row a)
+    }
+
+
+{-| TODO
+-}
+loaded : Int -> List a -> Status (Data a)
+loaded total values =
+    Loaded <| Data total (List.map Row values)
+
+
+{-| TODO
+-}
+type Row a
+    = Row a
+
+
+{-| TODO
+-}
+type Column a msg
+    = Column
+        { name : String
+        , abbrev : String
+        , width : String
+        , sortable : Bool
+        , hiddable : Bool
+        , searchable : Maybe (a -> String)
+        , visible : Bool
+        , viewCell : a -> Pipe msg -> List (Html msg)
+        , viewHeader : Pipe msg -> List (Html msg)
+        , comp : Maybe (a -> a -> Order)
+        }
+
+
+{-| TODO
+-}
+type alias Pagination =
+    { search : String
+    , orderBy : String
+    , order : Sort
+    , page : Int
+    , byPage : Int
+    }
+
+
+{-| TODO
+-}
+type alias Pipe msg =
+    ( State, State -> msg )
+
+
+{-| TODO
 -}
 type alias Config a msg =
-  { pipe        : State -> msg          -- forward the messages to parent
-  , getRowId    : a -> String           -- get the id from the data
-  , columns     : List (Column a msg)   -- columns configuration
-  , toolbar     : ToolbarConfig msg     -- toolbar configuration
-  , footerView  : H.Html msg            -- custom footer view
-  }
+    { pipe : State -> msg
+    , columns : List (Column a msg)
+    , pagination : Bool
+    , numsPage : List Int
+    , initialNumPage : Int
+    , searchBar : Bool
+    , selectNumByPage : Bool
+    , hideColumn : Bool
+    , onChange : State -> msg
+    , errorView : String -> Error -> Html msg
+    , toolbar : List (Html msg)
+    }
 
 
-{-| Column configuration. -}
-type Column a msg = Column (ColumnInternal a msg)
-
-
-{-|
-  sortable  : could be sortable
-  indexable : indexable for search filtering
-  hidable   : selectColumns options must be true
+{-| TODO
 -}
-type alias ColumnInternal a msg =
-  { name          : String
-  , getValue      : a -> String
-  , headerView    : (State -> msg) -> State -> List (H.Html msg)
-  , cellView      : a -> (State -> msg) -> State -> List (H.Html msg)
-  , width         : String
-  , sortable      : Bool
-  , indexable     : Bool
-  , hidable       : Bool
-  }
+type alias State =
+    { visibleColumns : List String
+    , orderBy : Maybe String
+    , order : Sort
+    , page : Int
+    , byPage : Int
+    , search : String
+    , btPagination : Bool
+    , btColumns : Bool
+    , tmp : String
+    }
 
 
-{-| Sorting column state. -}
-type SortStatus
-  = StandBy       -- ↕
-  | Descending    -- ↓
-  | Ascending     -- ↑
-
-
-{-| Toolbar configuration. -}
-type alias ToolbarConfig msg =
-  { search        : Bool
-  , selectColumns : Bool
-  , actions       : List (ActionConfig msg)
-  }
-
-
-{-| Action configuration in the toolbar. -}
-type ActionConfig msg = ActionConfig (State -> H.Html msg)
-
-
-{-| Get the next sort status
-
-      ↕ --> ↓ --> ↑
-            ^-----|
+{-| TODO
 -}
-nextSortStatus : SortStatus -> SortStatus
-nextSortStatus status =
-  case status of
-    StandBy     -> Descending
-    Descending  -> Ascending
-    Ascending   -> Descending
+pagination : State -> Pagination
+pagination state =
+    Pagination state.search
+        (Maybe.withDefault "" state.orderBy)
+        state.order
+        state.page
+        state.byPage
 
 
-{-| Default footer of table. -}
-defaultFooter : H.Html msg
-defaultFooter = H.text ""
-
-
-{-| Column with checkbox to select multiple rows. -}
-checkboxColumn : (a -> String) -> Column a msg
-checkboxColumn getId =
-  Column
-  { name        = "checkbox"
-  , getValue    = always ""
-  , headerView  = viewColumnCheckbox
-  , cellView    = viewCellCheckbox getId
-  , width       = "15px"
-  , sortable    = False
-  , indexable   = False
-  , hidable     = False
-  }
-
-
-{-| Invisible column. -}
-invisibleColumn : String -> (a -> String) -> Column a msg
-invisibleColumn name getValue =
-  Column
-  { name        = name
-  , getValue    = always ""
-  , headerView  = viewColumnHide
-  , cellView    = viewCellInvisible
-  , width       = "auto"
-  , sortable    = False
-  , indexable   = False
-  , hidable     = False
-  }
-
-
-{-| Standard column configuration to render the string data. -}
-stringColumn : String -> (a -> String) -> Column a msg
-stringColumn name getValue =
-  stringWidthColumn "auto" name getValue
-
-
-{-| Similar to `stringColumn` but with a custom width. -}
-stringWidthColumn : String -> String -> (a -> String) -> Column a msg
-stringWidthColumn width name getValue =
-  Column
-  { name        = name
-  , getValue    = getValue
-  , headerView  = viewColumnString name
-  , cellView    = viewCellText getValue
-  , width       = width
-  , sortable    = True
-  , indexable   = True
-  , hidable     = True
-  }
-
-
-{-| Column width custom header and cell rendering. -}
-customColumn : String -> String -> (a -> b) -> H.Html msg -> (b -> H.Html msg) -> Column a msg
-customColumn name width getValue renderHeader renderCell =
-  Column
-  { name        = name
-  , getValue    = toString << getValue
-  , headerView  = (\_ _ -> [ renderHeader ])
-  , cellView    = (\data _ _ -> [ (renderCell << getValue ) data ])
-  , width       = width
-  , sortable    = True
-  , indexable   = True
-  , hidable     = True
-  }
-
-
-{-| Helper to create an action configuration with the color of Bootstrap
-(primary, success, danger, ...) and the icon of font-awesome (plus, minus, ...).
-
-Example:
-
-  actionDefault "success" "lock"
+{-| TODO
 -}
+init : Config a msg -> State
+init config =
+    { visibleColumns =
+        List.filterMap
+            (\(Column c) ->
+                iff c.visible (Just c.name) Nothing
+            )
+            config.columns
+    , orderBy = Nothing
+    , order = Ascending
+    , page = 0
+    , byPage = config.initialNumPage
+    , search = ""
+    , btPagination = False
+    , btColumns = False
+    , tmp = ""
+    }
 
-actionDefault : msg -> String -> String -> String -> ActionConfig msg
-actionDefault actionMsg color icon tooltip =
-  ActionConfig (viewDefaultAction color icon tooltip actionMsg)
+
+{-| TODO
+-}
+col :
+    (a -> a -> Order)
+    -> (a -> Html msg)
+    -> String
+    -> String
+    -> Bool
+    -> Bool
+    -> Maybe (a -> String)
+    -> Column a msg
+col comp viewCell title_ abbrev sortable hiddable searchable =
+    Column
+        { name = title_
+        , abbrev = abbrev
+        , width = ""
+        , sortable = sortable
+        , searchable = searchable
+        , visible = True
+        , hiddable = hiddable
+        , viewCell = \x _ -> [ viewCell x ]
+        , viewHeader = viewHeader abbrev title_ sortable
+        , comp = Just comp
+        }
 
 
---
--- VIEWS
---
+{-| TODO
+-}
+colI : (a -> Int) -> String -> String -> Bool -> Bool -> Column a msg
+colI get title_ abbrev sortable hiddable =
+    Column
+        { name = title_
+        , abbrev = abbrev
+        , width = ""
+        , sortable = sortable
+        , searchable = Just (get >> String.fromInt)
+        , visible = True
+        , hiddable = hiddable
+        , viewCell = \x _ -> [ text <| String.fromInt (get x) ]
+        , viewHeader = viewHeader abbrev title_ sortable
+        , comp = Just <| \a b -> compare (get a) (get b)
+        }
 
-{-| Main table view. -}
-view : Config a msg -> State -> List (Row a) -> H.Html msg
-view config state rows =
-  let
-    -- get funcs of indexed columns to get value from data
-    funcs = List.filterMap (\(Column col) -> maybe col.indexable col.getValue) config.columns
 
-    -- filter the rows from user's search
-    currentRows =
-      List.filter (\(Row data) ->
-        List.any (
-          ((|>) data) >> (String.contains state.search)
-        ) funcs
-      ) rows
-      |> sort config.columns state  -- sort by column
-      -- |> selected state.selected    -- selected rows
+{-| TODO
+-}
+colS : (a -> String) -> String -> String -> Bool -> Bool -> Column a msg
+colS get title_ abbrev sortable hiddable =
+    Column
+        { name = title_
+        , abbrev = abbrev
+        , width = ""
+        , sortable = sortable
+        , searchable = Just get
+        , visible = True
+        , hiddable = hiddable
+        , viewCell = \x _ -> [ text (get x) ]
+        , viewHeader = viewHeader abbrev title_ sortable
+        , comp = Just <| \a b -> compare (get a) (get b)
+        }
 
-  in
-    H.div [ HA.class "elm-table" ]
-    [ toolbarView config state
-    , viewTable config state currentRows
+
+{-| TODO
+-}
+withWidth : String -> Column a msg -> Column a msg
+withWidth w (Column c) =
+    Column { c | width = w }
+
+
+{-| TODO
+-}
+withViewCell : (a -> Pipe msg -> List (Html msg)) -> Column a msg -> Column a msg
+withViewCell f (Column c) =
+    Column { c | viewCell = f }
+
+
+{-| TODO
+-}
+viewHeader : String -> String -> Bool -> Pipe msg -> List (Html msg)
+viewHeader abbrev title_ sortable ( state, pipe ) =
+    [ iff (String.isEmpty abbrev)
+        (span [] [ text title_ ])
+        (abbr [ title title_ ] [ text abbrev ])
+    , iff sortable
+        (iff (state.orderBy == Just title_)
+            (a
+                [ class "sort"
+                , onClick <| pipe { state | order = nextOrder state.order }
+                ]
+                [ text <|
+                    case state.order of
+                        Ascending ->
+                            "↿"
+
+                        Descending ->
+                            "⇂"
+
+                        StandBy ->
+                            "⇅"
+                ]
+            )
+            (a
+                [ class "sort"
+                , onClick <| pipe { state | order = Ascending, orderBy = Just title_ }
+                ]
+                [ text "⇅" ]
+            )
+        )
+        (text "")
     ]
 
-{-| -}
-toolbarView : Config a msg -> State -> H.Html msg
-toolbarView {pipe, columns, toolbar} state =
-  H.form [ HA.class "d-flex toolbar" ] <| List.concat
-  [ [ optional toolbar.search (toolbarViewSearch pipe state) ]
-  , List.map (\(ActionConfig view) -> view state) toolbar.actions
-  , [ optional toolbar.selectColumns (viewSelectColumns columns pipe state) ]
-  ]
 
-{-| -}
-toolbarViewSearch : (State -> msg) -> State -> H.Html msg
-toolbarViewSearch pipe state =
-  H.input
-  [ HA.type_ "text"
-  , HE.onInput (\val -> pipe { state | search = val } )
-  , HA.class "form-control"
-  , HA.placeholder "Search..."] []
-
-{-| -}
-viewSelectColumns : List (Column a msg) -> (State -> msg) -> State -> H.Html msg
-viewSelectColumns columns pipe state =
-  H.div [ HA.class "dropdown" ]
-  [ H.button
-    [ HA.type_ "button"
-    , HA.class "btn btn-outline-secondary btn-sm"
-    , HA.href "#"
-    , HA.attribute "data-toggle" "dropdown"
-    ] [ H.i [ HA.class "fa fa-th" ] [] ]
-  , H.div [ HA.class "dropdown-menu dropdown-menu-right" ]
-    <| List.map (\(Column col) -> viewSelectColumnsItem col pipe state)
-    <| List.filter (\(Column col) -> col.hidable) columns
-  ]
-
-{-| -}
-viewSelectColumnsItem : ColumnInternal a msg -> (State -> msg) -> State -> H.Html msg
-viewSelectColumnsItem col pipe state =
-  let
-    isHided = List.member col.name state.hidedColumns
-    -- TODO: not optimal, pre calculate the 2 state before to raise message
-    toggleMsg = if isHided then showColumn col.name else hideColumn col.name
-  in
-    H.a
-    [ HA.class "dropdown-item d-flex justify-content-between text-left"
-    , HA.href "#"
-    , onClickEvent (pipe (toggleMsg state))
-    ]
-    [ H.text col.name
-    , if isHided then
-        H.span [ HA.class "text-secondary" ] [ H.i [ HA.class "fa fa-square-o fa-fw" ] [] ]
-      else
-        H.span [ HA.class "text-success" ] [ H.i [ HA.class "fa fa-check-square-o fa-fw" ] [] ]
-    ]
-
-{-| -}
-hideColumn : String -> State -> State
-hideColumn name state =
-  { state | hidedColumns = name :: state.hidedColumns }
-
-{-| -}
-showColumn : String -> State -> State
-showColumn name state =
-  { state | hidedColumns = List.filter ((/=) name) state.hidedColumns }
-
-{-| -}
-viewTable : Config a msg -> State -> List (Row a) -> H.Html msg
-viewTable config state rows =
-  let
-    columns =
-      List.map (\(Column col) -> col) config.columns
-      |> List.filter (not << ((flip List.member) state.hidedColumns) << (.name))
-  in
-  H.table [ HA.class "table table-sm table-stripped" ]
-  [ viewTableHead columns config.pipe state
-  , viewTableBody columns config.getRowId config.pipe state rows
-  , config.footerView
-  ]
-
-{-| -}
-viewTableHead : List (ColumnInternal a msg) -> (State -> msg) -> State -> H.Html msg
-viewTableHead columns pipe state =
-  H.thead []
-  [ H.tr [] <| List.map (\{name, sortable, headerView, width} ->
-      let
-        (stateName, stateStatus) = state.sortedColumn
-        status = if name == stateName then stateStatus else StandBy
-        sortIcon = optional sortable
-          <| viewTableHeadItemSort status name pipe state
-      in
-        H.th [HA.style [("width", width)]] <| (headerView pipe state) ++ [sortIcon]
-    ) columns
-  ]
-
-{-| -}
-viewTableHeadItemSort : SortStatus -> ColumnName -> (State -> msg) -> State -> H.Html msg
-viewTableHeadItemSort status =
-  case status of
-    StandBy     -> sortLink "fa fa-fw fa-sort"      "#c8c8ca"
-    Descending  -> sortLink "fa fa-fw fa-sort-desc" "#7a7a7f"
-    Ascending   -> sortLink "fa fa-fw fa-sort-asc"  "#7a7a7f"
-
-{-| -}
-sortLink : String -> String -> ColumnName -> (State -> msg) -> State -> H.Html msg
-sortLink cls color name pipe state =
-  let
-      (_, status) = state.sortedColumn
-      clickMsg = pipe {state | sortedColumn = (name, nextSortStatus status)}
-  in
-    H.a [ HA.href "#" , onClickEvent clickMsg ]
-    [ H.span [ HA.style [("color", color)] ] [ H.i [ HA.class cls ] [] ] ]
-
-{-| -}
-viewTableBody : List (ColumnInternal a msg) -> (a -> String) -> (State -> msg) -> State -> List (Row a) -> H.Html msg
-viewTableBody columns getRowId pipe state rows =
-  H.tbody [] <| List.map (viewTableBodyRow columns getRowId pipe state) rows
-
-{-| -}
-viewTableBodyRow : List (ColumnInternal a msg) -> (a -> String) -> (State -> msg) -> State -> Row a -> H.Html msg
-viewTableBodyRow columns getRowId pipe state (Row data) =
-  H.tr [] <| List.map (\col-> H.td [] <| col.cellView data pipe state) columns
-
-
--- Column views
-
-{-| -}
-viewColumnHide : (State -> msg) -> State -> List (H.Html msg)
-viewColumnHide _ _ =
-  [ H.text "" ]
-
-{-| -}
-viewColumnString : String -> (State -> msg) -> State -> List (H.Html msg)
-viewColumnString name _ _ =
-  [ H.text name ]
-
-{-| -}
-viewColumnCheckbox : (State -> msg) -> State -> List (H.Html msg)
-viewColumnCheckbox pipe state =
-  [ H.input
-    [ HA.type_ "checkbox"
-    , HE.onCheck (pipe << selectAllRows state)
-    ] []
-  ]
-
-{-| -}
-selectAllRows : State -> Bool -> State
-selectAllRows state value =
-  { state | selected = Dict.map (\_ _ -> value) state.selected }
-
-
--- Cell views
-
-{-| -}
-viewCellInvisible : a -> (State -> msg) -> State -> List (H.Html msg)
-viewCellInvisible _ _ _ = []
-
-{-| -}
-viewCellText : (a -> String) -> a -> (State -> msg) -> State -> List (H.Html msg)
-viewCellText toStr data _ _ =
-  [ H.text (toStr data) ]
-
-{-| -}
-viewCellCheckbox : (a -> String) -> a -> (State -> msg) -> State -> List (H.Html msg)
-viewCellCheckbox toStr data pipe state =
-  [ H.input
-    [ HA.type_ "checkbox"
-    , HE.onCheck (pipe << (checkRowState (toStr data) state))
-    , HA.checked <| Maybe.withDefault False (Dict.get (toStr data) state.selected)
-    ] []
-  ]
-
-{-| -}
-checkRowState : String -> State -> Bool -> State
-checkRowState id state value =
-   { state | selected = Dict.insert id value state.selected}
-
--- Actions
-
-{-| -}
-viewDefaultAction : String -> String -> String -> msg -> (State -> H.Html msg)
-viewDefaultAction bsColor faIcon tooltip actionMsg =
-  (\_ ->
-    H.button
-    [ HA.type_ "button"
-    , HE.onClick actionMsg
-    , HA.class ("btn btn-sm btn-outline-" ++ bsColor)
-    , HA.attribute "data-toggle" "tooltip"
-    , HA.attribute "data-placement" "bottom"
-    , HA.title tooltip ] [ H.i [ HA.class ("fa fa-" ++ faIcon) ] [] ]
-  )
 
 --
--- UTILS
+-- VIEW
 --
 
-{-| -}
-maybe : Bool -> a -> Maybe a
-maybe cond val = if cond then Just val else Nothing
 
-{-| -}
-onClickEvent : msg -> H.Attribute msg
-onClickEvent evt = HE.onWithOptions "click"
-  { stopPropagation = True,  preventDefault = True } (Decode.succeed evt)
+{-| TODO
+-}
+view : Config a msg -> State -> Rows a -> Html msg
+view config state rows_ =
+    case rows_ of
+        Dynamic res ->
+            div [ class "grt" ] <|
+                header config config.onChange state
+                    :: (case res of
+                            Loading ->
+                                [ div
+                                    [ class "spinner" ]
+                                    [ span [ class "gg-spinner" ] [] ]
+                                ]
 
-{-| -}
-optional : Bool -> H.Html msg -> H.Html msg
-optional cond comp = if cond then comp else H.text ""
+                            Loaded { total, rows } ->
+                                [ tabularDynamic config state total rows
+                                , footer config.onChange state total
+                                ]
+
+                            Failed msg err ->
+                                [ config.errorView msg err ]
+                       )
+
+        Static rows ->
+            div [ class "grt" ]
+                [ header config config.pipe state
+                , tabularStatic config state rows
+                , footer config.pipe state (List.length rows)
+                ]
+
+
+
+-- Header
+
+
+header : Config a msg -> (State -> msg) -> State -> Html msg
+header config pipe state =
+    div [ class "field is-grouped header" ]
+        [ search config.pipe pipe state
+        , div [ class "toolbar-custom" ] config.toolbar
+        , toolbar config state
+        ]
+
+
+search : (State -> msg) -> (State -> msg) -> State -> Html msg
+search pipe pipeValid state =
+    div [ class "control is-expanded has-icons-right toolbar-search" ]
+        [ input
+            [ class "input"
+            , type_ "text"
+            , placeholder "Search..."
+            , onInput (\s -> pipe { state | tmp = s })
+            , onKeyDown (\i -> iff (i == 13) (pipeValid { state | search = state.tmp }) (pipe state))
+            ]
+            []
+        , span [ class "icon is-right" ] [ i [ class "gg-search" ] [] ]
+        ]
+
+
+toolbar : Config a msg -> State -> Html msg
+toolbar config state =
+    div [ class "control field is-grouped toolbar-table" ] <|
+        [ menuPagination config state
+        , menuColumns config state
+        ]
+
+
+menuColumns : Config a msg -> State -> Html msg
+menuColumns config state =
+    dropdown
+        "gg-menu-grid-r"
+        "Columns"
+        (config.pipe { state | btColumns = not state.btColumns, btPagination = False })
+        state.btColumns
+        (List.filterMap
+            (\(Column c) ->
+                let
+                    chk =
+                        List.any ((==) c.name) state.visibleColumns
+
+                    msg =
+                        config.pipe
+                            { state
+                                | visibleColumns =
+                                    iff chk
+                                        (List.filter ((/=) c.name) state.visibleColumns)
+                                        (c.name :: state.visibleColumns)
+                            }
+                in
+                iff c.hiddable
+                    (Just
+                        (a
+                            [ class "dropdown-item"
+                            , onClick msg
+                            , href ""
+                            ]
+                            [ text c.name
+                            , input
+                                [ class "is-checkradio is-pulled-right"
+                                , type_ "checkbox"
+                                , checked chk
+                                , onCheck (\_ -> msg)
+                                ]
+                                []
+                            ]
+                        )
+                    )
+                    Nothing
+            )
+            config.columns
+        )
+
+
+menuPagination : Config a msg -> State -> Html msg
+menuPagination config state =
+    dropdown
+        "gg-stories"
+        "Pagination"
+        (config.pipe
+            { state
+                | btPagination = not state.btPagination
+                , btColumns = False
+            }
+        )
+        state.btPagination
+        (List.map
+            (\i ->
+                a
+                    [ class "dropdown-item"
+                    , onClick (config.onChange { state | byPage = i })
+                    , href ""
+                    ]
+                    [ text (String.fromInt i)
+                    , iff (i == state.byPage)
+                        (span [ class "check" ] [ text "✓" ])
+                        (text "")
+                    ]
+            )
+            config.numsPage
+        )
+
+
+dropdown : String -> String -> msg -> Bool -> List (Html msg) -> Html msg
+dropdown btn tt msg active items =
+    div [ class <| "control dropdown is-right" ++ iff active " is-active" "" ]
+        [ div [ class "dropdown-trigger" ]
+            [ a
+                [ class "button has-tooltip-arrow"
+                , attribute "data-tooltip" tt
+                , attribute "aria-haspopup" "true"
+                , attribute "aria-controls" "dropdown-menu"
+                , onClick msg
+                , href ""
+                ]
+                [ i [ class btn ] [] ]
+            ]
+        , div
+            [ class "dropdown-menu"
+            , id "dropdown-menu"
+            , attribute "role" "menu"
+            ]
+            [ div [ class "dropdown-content" ] items ]
+        ]
+
+
+
+-- Table
+
+
+tabularDynamic : Config a msg -> State -> Int -> List (Row a) -> Html msg
+tabularDynamic config state total rows =
+    let
+        columns =
+            List.filter
+                (\(Column c) ->
+                    List.member c.name state.visibleColumns
+                )
+                config.columns
+    in
+    div [ class "table" ]
+        [ table [ class "table is-striped is-hoverable is-fullwidth" ]
+            [ thead []
+                [ tr [] <|
+                    List.map
+                        (\(Column c) ->
+                            th [] (c.viewHeader ( state, config.onChange ))
+                        )
+                        columns
+                ]
+            , tbody [] <|
+                List.map
+                    (\(Row r) ->
+                        tr []
+                            (List.map
+                                (\(Column c) ->
+                                    td [ style "width" c.width ] <|
+                                        c.viewCell r ( state, config.pipe )
+                                )
+                                columns
+                            )
+                    )
+                    rows
+            ]
+        ]
+
+
+tabularStatic : Config a msg -> State -> List (Row a) -> Html msg
+tabularStatic config state rows =
+    let
+        columns =
+            List.filter
+                (\(Column c) -> List.member c.name state.visibleColumns)
+                config.columns
+
+        srows =
+            iff
+                (String.isEmpty state.search)
+                rows
+                (List.filter
+                    (\(Row a) ->
+                        List.any
+                            (\(Column c) ->
+                                case c.searchable of
+                                    Nothing ->
+                                        False
+
+                                    Just fn ->
+                                        String.contains state.search (fn a)
+                            )
+                            config.columns
+                    )
+                    rows
+                )
+
+        frows =
+            srows
+                |> sort config.columns state
+                |> Array.fromList
+                |> Array.slice (state.page * state.byPage) ((state.page + 1) * state.byPage)
+                |> Array.toList
+    in
+    div [ class "tabular" ]
+        [ table [ class "table is-striped is-hoverable is-fullwidth" ]
+            [ thead []
+                [ tr [] <|
+                    List.map
+                        (\(Column c) ->
+                            th [] (c.viewHeader ( state, config.pipe ))
+                        )
+                        columns
+                ]
+            , tbody [] <|
+                List.map
+                    (\(Row r) ->
+                        tr []
+                            (List.map
+                                (\(Column c) ->
+                                    td [ style "width" c.width ] <|
+                                        c.viewCell r ( state, config.pipe )
+                                )
+                                columns
+                            )
+                    )
+                    frows
+            ]
+        ]
+
+
+
+-- Footer
+
+
+footer : (State -> msg) -> State -> Int -> Html msg
+footer pipe state total =
+    let
+        nb =
+            floor (toFloat total / toFloat state.byPage) + 1
+
+        ( ia, ib, ic ) =
+            pagIndex nb state.page
+    in
+    div [ class "footer" ]
+        [ nav
+            [ class "pagination is-centered"
+            , attribute "role" "navigation"
+            , attribute "aria-label" "pagination"
+            ]
+            [ ifh (nb > 1) <|
+                a
+                    [ class <| "pagination-previous" ++ iff (state.page == 0) " is-disabled" ""
+                    , onClick <| pipe { state | page = state.page - 1 }
+                    , href ""
+                    ]
+                    [ text "Previous" ]
+            , ifh (nb > 1) <|
+                a
+                    [ class <| "pagination-next" ++ iff (state.page == nb - 1) " is-disabled" ""
+                    , onClick <| pipe { state | page = state.page + 1 }
+                    , href ""
+                    ]
+                    [ text "Next page" ]
+            , ul [ class "pagination-list" ]
+                -- First page
+                [ ifh (nb > 3) <|
+                    a
+                        [ class <| "pagination-link " ++ iff (state.page == 0) "is-current" ""
+                        , attribute "aria-label" "Goto page 1"
+                        , attribute "aria-current" <| iff (state.page == 0) "page" ""
+                        , onClick <| pipe { state | page = 0 }
+                        , href ""
+                        ]
+                        [ text "1" ]
+                , ifh (nb > 3) <| span [ class "pagination-ellipsis" ] [ text "…" ]
+
+                -- Middle (m-1) m (m+1)
+                , ifh (nb > 2) <|
+                    a
+                        [ class <| "pagination-link " ++ iff (state.page == ia) "is-current" ""
+                        , attribute "aria-label" <| "Goto page " ++ String.fromInt (ia + 1)
+                        , attribute "aria-current" <| iff (state.page == ia) "page" ""
+                        , onClick <| pipe { state | page = ia }
+                        , href ""
+                        ]
+                        [ text <| String.fromInt (ia + 1) ]
+                , ifh (nb > 0) <|
+                    a
+                        [ class <| "pagination-link " ++ iff (state.page == ib) "is-current" ""
+                        , attribute "aria-label" <| "Goto page " ++ String.fromInt (ib + 1)
+                        , attribute "aria-current" <| iff (state.page == ib) "page" ""
+                        , onClick <| pipe { state | page = ib }
+                        , href ""
+                        ]
+                        [ text <| String.fromInt (ib + 1) ]
+                , ifh (nb > 1) <|
+                    a
+                        [ class <| "pagination-link " ++ iff (state.page == ic) "is-current" ""
+                        , attribute "aria-label" <| "Goto page " ++ String.fromInt (ic + 1)
+                        , attribute "aria-current" <| iff (state.page == ic) "page" ""
+                        , onClick <| pipe { state | page = ic }
+                        , href ""
+                        ]
+                        [ text <| String.fromInt (ic + 1) ]
+
+                -- Last page
+                , ifh (nb > 4) <| span [ class "pagination-ellipsis" ] [ text "…" ]
+                , ifh (nb > 4) <|
+                    a
+                        [ class <| "pagination-link " ++ iff (state.page == nb - 1) "is-current" ""
+                        , attribute "aria-label" <| "Goto page " ++ String.fromInt nb
+                        , onClick <| pipe { state | page = nb - 1 }
+                        , href ""
+                        ]
+                        [ text <| String.fromInt nb ]
+                ]
+            ]
+        ]
+
+
+pagIndex : Int -> Int -> ( Int, Int, Int )
+pagIndex n c =
+    if c == 0 then
+        if n > 3 then
+            let
+                m =
+                    floor (toFloat n / 2)
+            in
+            ( m - 1, m, m + 1 )
+
+        else
+            ( 0, 1, 2 )
+
+    else if c == 1 then
+        if n > 3 then
+            ( 1, 2, 3 )
+
+        else
+            ( 0, 1, 2 )
+
+    else if c == n - 1 then
+        if n > 3 then
+            ( n - 4, n - 3, n - 2 )
+
+        else
+            ( n - 3, n - 2, n - 1 )
+
+    else if c == n - 2 then
+        ( n - 4, n - 3, n - 2 )
+
+    else
+        ( c - 1, c, c + 1 )
+
+
+{-| TODO
+-}
+errorDefaultView : String -> Error -> Html msg
+errorDefaultView msg err =
+    div [ class "error" ] [ text (errStr msg err) ]
+
 
 
 --
 -- SORT
 --
 
-{-| Sort the rows. -}
+
 sort : List (Column a msg) -> State -> List (Row a) -> List (Row a)
 sort columns state rows =
-  let
-      (columnName, columnStatus) = state.sortedColumn
-      getValue = Maybe.map (\(Column col) -> col.getValue)
-        <| LE.find (\(Column col) -> col.name == columnName) columns
-  in
-    case getValue of
-      Nothing   -> rows
-      Just func -> sortRowsFromStatus columnStatus func rows
+    let
+        comp =
+            Maybe.andThen (\(Column c) -> c.comp) <|
+                find (\(Column c) -> Just c.name == state.orderBy) columns
+    in
+    case comp of
+        Nothing ->
+            rows
 
-{-| -}
-sortRowsFromStatus : SortStatus -> (a -> String) -> List (Row a) -> List (Row a)
-sortRowsFromStatus status getValue rows =
-  case status of
-    StandBy    -> rows
-    Descending -> sortRows getValue rows
-    Ascending  -> List.reverse (sortRows getValue rows)
+        Just fn ->
+            sortRowsFromStatus fn state.order rows
 
-{-| -}
-sortRows : (a -> String) -> List (Row a) -> List (Row a)
-sortRows getValue rows =
-  List.sortBy (\(Row data) -> getValue data) rows
+
+sortRowsFromStatus : (a -> a -> Order) -> Sort -> List (Row a) -> List (Row a)
+sortRowsFromStatus comp order rows =
+    case order of
+        StandBy ->
+            rows
+
+        Descending ->
+            sortRows comp rows
+
+        Ascending ->
+            List.reverse (sortRows comp rows)
+
+
+sortRows : (a -> a -> Order) -> List (Row a) -> List (Row a)
+sortRows comp rows =
+    List.sortWith (\(Row a) (Row b) -> comp a b) rows
+
+
+find : (a -> Bool) -> List a -> Maybe a
+find predicate list =
+    case list of
+        [] ->
+            Nothing
+
+        first :: rest ->
+            if predicate first then
+                Just first
+
+            else
+                find predicate rest
+
+
+nextOrder : Sort -> Sort
+nextOrder status =
+    case status of
+        StandBy ->
+            Descending
+
+        Descending ->
+            Ascending
+
+        Ascending ->
+            Descending

@@ -1,0 +1,65 @@
+@use "icons";
+
+.gribouille.table {
+  width: 100%;
+
+  .spinner {
+    margin-right: 50%;
+    margin-left: 50%;
+    height: 200px;
+    padding-top: 80px;
+    margin-bottom: 100px;
+  }
+
+  .error {
+    color: rgba(255, 0, 0, 0.8);
+    text-align: center;
+    font-style: italic;
+  }
+
+  .header {
+    .toolbar-search {
+      min-width: 200px;
+    }
+
+    .toolbar-custom {
+      padding-right: 16px;
+      display: flex;
+    }
+
+    .toolbar-table {
+      .button {
+        width: 50px;
+      }
+
+      .dropdown-item {
+        padding-right: 16px;
+      }
+
+      .check {
+        float: right;
+        font-weight: bold;
+        color: green;
+      }
+    }
+  }
+
+  .table {
+    .sort {
+      color: lightgray;
+      margin-left: 5px;
+    }
+  }
+
+  .footer {
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+
+  .is-disabled {
+    pointer-events: none;
+    cursor: default;
+    text-decoration: none;
+    color: lightgray;
+  }
+}
