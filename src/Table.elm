@@ -1,6 +1,6 @@
 module Table exposing
     ( Config, Data, Pipe, Row, Rows(..), State, Status(..), init, loaded
-    , Column, Pagination, Sort(..), col, colI, colS, errorDefaultView, pagination, withWidth
+    , Column(..), Pagination, Sort(..), col, colI, colS, errorDefaultView, pagination, withWidth
     , view, viewHeader, withViewCell
     )
 
