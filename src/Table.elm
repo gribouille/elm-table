@@ -1,6 +1,6 @@
 module Table exposing
     ( Config, Data, Pipe, Row, Rows(..), State, Status(..), init, loaded
-    , Column(..), Pagination, Sort(..), col, colI, colS, errorDefaultView, pagination, withWidth
+    , Column(..), Pagination, Sort(..), col, colI, colS, colSubS, errorDefaultView, pagination, withWidth
     , view, viewHeader, withViewCell
     )
 
@@ -14,7 +14,7 @@ module Table exposing
 
 # Column
 
-@docs Column, Pagination, Sort, col, colI, colS, errorDefaultView, pagination, withWidth
+@docs Column, Pagination, Sort, col, colI, colS, colSubS, errorDefaultView, pagination, withWidth
 
 
 # View
@@ -69,6 +69,10 @@ loaded total values =
     Loaded <| Data total (List.map Row values)
 
 
+type alias RowId =
+    String
+
+
 {-| TODO
 -}
 type Row a
@@ -111,7 +115,7 @@ type alias Pipe msg =
 
 {-| TODO
 -}
-type alias Config a msg =
+type alias Config a b msg =
     { pipe : State -> msg
     , columns : List (Column a msg)
     , pagination : Bool
@@ -123,6 +127,12 @@ type alias Config a msg =
     , onChange : State -> msg
     , errorView : String -> Error -> Html msg
     , toolbar : List (Html msg)
+    , selection : Bool
+    , getId : a -> String
+    , getSubId : b -> String
+    , subColumns : List (Column b msg)
+    , getSubTable : a -> List b
+    , excludeSubSelection : Bool
     }
 
 
@@ -138,6 +148,9 @@ type alias State =
     , btPagination : Bool
     , btColumns : Bool
     , tmp : String
+    , selected : List RowId
+    , subSelected : List RowId
+    , expand : List RowId
     }
 
 
@@ -154,7 +167,7 @@ pagination state =
 
 {-| TODO
 -}
-init : Config a msg -> State
+init : Config a b msg -> State
 init config =
     { visibleColumns =
         List.filterMap
@@ -170,6 +183,9 @@ init config =
     , btPagination = False
     , btColumns = False
     , tmp = ""
+    , selected = []
+    , subSelected = []
+    , expand = []
     }
 
 
@@ -237,6 +253,148 @@ colS get title_ abbrev sortable hiddable =
 
 {-| TODO
 -}
+colSubS : (a -> String) -> String -> String -> Column a msg
+colSubS get title_ abbrev =
+    Column
+        { name = title_
+        , abbrev = abbrev
+        , width = ""
+        , sortable = False
+        , searchable = Nothing
+        , visible = True
+        , hiddable = True
+        , viewCell = \x _ -> [ text (get x) ]
+        , viewHeader = viewHeader abbrev title_ False
+        , comp = Just <| \a b -> compare (get a) (get b)
+        }
+
+
+colSubSelection : Bool -> (a -> String) -> List (Row a) -> Column a msg
+colSubSelection exclude getId rows =
+    Column
+        { name = ""
+        , abbrev = ""
+        , width = "10px"
+        , sortable = False
+        , searchable = Nothing
+        , visible = True
+        , hiddable = False
+        , viewCell = colSubSelectionViewCell exclude getId
+        , viewHeader = colSubSelectionViewHeader exclude getId rows
+        , comp = Nothing
+        }
+
+
+colSubSelectionViewCell : Bool -> (a -> String) -> a -> Pipe msg -> List (Html msg)
+colSubSelectionViewCell exclude getId a ( s, pipe ) =
+    [ input
+        [ class "checkbox"
+        , type_ "checkbox"
+        , checked (List.member (getId a) s.subSelected)
+        , onCheck
+            (\b ->
+                pipe
+                    { s
+                        | subSelected =
+                            iff b
+                                (getId a :: s.subSelected)
+                                (List.filter (\x -> x /= getId a) s.subSelected)
+                        , selected = iff exclude [] s.selected
+                    }
+            )
+        ]
+        []
+    ]
+
+
+colSubSelectionViewHeader : Bool -> (a -> String) -> List (Row a) -> Pipe msg -> List (Html msg)
+colSubSelectionViewHeader exclude getId rows ( s, pipe ) =
+    [ input
+        [ class "checkbox"
+        , type_ "checkbox"
+        , onCheck
+            (\b ->
+                let
+                    ids =
+                        List.map (\(Row a) -> getId a) rows
+                in
+                pipe
+                    { s
+                        | subSelected =
+                            iff b
+                                (ids ++ s.subSelected)
+                                (List.filter (\x -> not (List.member x ids)) s.subSelected)
+                        , selected = iff exclude [] s.selected
+                    }
+            )
+        ]
+        []
+    ]
+
+
+colSelection : Bool -> (a -> String) -> List (Row a) -> Column a msg
+colSelection exclude getId rows =
+    Column
+        { name = ""
+        , abbrev = ""
+        , width = "10px"
+        , sortable = False
+        , searchable = Nothing
+        , visible = True
+        , hiddable = False
+        , viewCell = colSelectionViewCell exclude getId
+        , viewHeader = colSelectionViewHeader exclude getId rows
+        , comp = Nothing
+        }
+
+
+colSelectionViewCell : Bool -> (a -> String) -> a -> Pipe msg -> List (Html msg)
+colSelectionViewCell exclude getId a ( s, pipe ) =
+    [ input
+        [ class "checkbox"
+        , type_ "checkbox"
+        , checked (List.member (getId a) s.selected)
+        , onCheck
+            (\b ->
+                pipe
+                    { s
+                        | selected =
+                            iff b
+                                (getId a :: s.selected)
+                                (List.filter (\x -> x /= getId a) s.selected)
+                        , subSelected =
+                            iff exclude [] s.subSelected
+                    }
+            )
+        ]
+        []
+    ]
+
+
+colSelectionViewHeader : Bool -> (a -> String) -> List (Row a) -> Pipe msg -> List (Html msg)
+colSelectionViewHeader exclude getId rows ( s, pipe ) =
+    [ input
+        [ class "checkbox"
+        , type_ "checkbox"
+        , onCheck
+            (\b ->
+                pipe
+                    { s
+                        | selected =
+                            iff b
+                                (List.map (\(Row a) -> getId a) rows)
+                                []
+                        , subSelected =
+                            iff exclude [] s.subSelected
+                    }
+            )
+        ]
+        []
+    ]
+
+
+{-| TODO
+-}
 withWidth : String -> Column a msg -> Column a msg
 withWidth w (Column c) =
     Column { c | width = w }
@@ -293,7 +451,7 @@ viewHeader abbrev title_ sortable ( state, pipe ) =
 
 {-| TODO
 -}
-view : Config a msg -> State -> Rows a -> Html msg
+view : Config a b msg -> State -> Rows a -> Html msg
 view config state rows_ =
     case rows_ of
         Dynamic res ->
@@ -327,7 +485,7 @@ view config state rows_ =
 -- Header
 
 
-header : Config a msg -> (State -> msg) -> State -> Html msg
+header : Config a b msg -> (State -> msg) -> State -> Html msg
 header config pipe state =
     div [ class "field is-grouped header" ]
         [ search config.pipe pipe state
@@ -351,7 +509,7 @@ search pipe pipeValid state =
         ]
 
 
-toolbar : Config a msg -> State -> Html msg
+toolbar : Config a b msg -> State -> Html msg
 toolbar config state =
     div [ class "control field is-grouped toolbar-table" ] <|
         [ menuPagination config state
@@ -359,7 +517,7 @@ toolbar config state =
         ]
 
 
-menuColumns : Config a msg -> State -> Html msg
+menuColumns : Config a b msg -> State -> Html msg
 menuColumns config state =
     dropdown
         "gg-menu-grid-r"
@@ -405,7 +563,7 @@ menuColumns config state =
         )
 
 
-menuPagination : Config a msg -> State -> Html msg
+menuPagination : Config a b msg -> State -> Html msg
 menuPagination config state =
     dropdown
         "gg-stories"
@@ -461,44 +619,131 @@ dropdown btn tt msg active items =
 -- Table
 
 
-tabularDynamic : Config a msg -> State -> Int -> List (Row a) -> Html msg
-tabularDynamic config state total rows =
+tabularDynamic : Config a b msg -> State -> Int -> List (Row a) -> Html msg
+tabularDynamic config state _ rows =
     let
         columns =
-            List.filter
-                (\(Column c) ->
-                    List.member c.name state.visibleColumns
+            List.append
+                (iff config.selection
+                    [ colSelection
+                        config.excludeSubSelection
+                        config.getId
+                        rows
+                    ]
+                    []
                 )
-                config.columns
+            <|
+                List.filter
+                    (\(Column c) -> List.member c.name state.visibleColumns)
+                    config.columns
     in
     div [ class "table" ]
         [ table [ class "table is-striped is-hoverable is-fullwidth" ]
             [ thead []
                 [ tr [] <|
-                    List.map
-                        (\(Column c) ->
-                            th [] (c.viewHeader ( state, config.onChange ))
-                        )
-                        columns
+                    th [] []
+                        :: List.indexedMap
+                            (\i (Column c) ->
+                                if i == 0 && config.selection then
+                                    th [] (c.viewHeader ( state, config.pipe ))
+
+                                else
+                                    th [] (c.viewHeader ( state, config.onChange ))
+                            )
+                            columns
                 ]
             , tbody [] <|
-                List.map
-                    (\(Row r) ->
-                        tr []
-                            (List.map
-                                (\(Column c) ->
-                                    td [ style "width" c.width ] <|
-                                        c.viewCell r ( state, config.pipe )
-                                )
-                                columns
-                            )
-                    )
-                    rows
+                List.concat <|
+                    List.map
+                        (\(Row r) ->
+                            let
+                                id =
+                                    config.getId r
+
+                                is =
+                                    List.member id state.expand
+                            in
+                            [ tr [] <|
+                                td [ class "cell-expand" ]
+                                    [ button
+                                        [ class "btn-expand"
+                                        , disabled (List.length (config.getSubTable r) == 0)
+                                        , onClick
+                                            (config.pipe
+                                                { state
+                                                    | expand =
+                                                        iff is
+                                                            (List.filter (\x -> x /= id) state.expand)
+                                                            (id :: state.expand)
+                                                }
+                                            )
+                                        ]
+                                        [ i [ class <| iff is "gg-corner-down-right" "gg-plus" ] [] ]
+                                    ]
+                                    :: List.map
+                                        (\(Column c) ->
+                                            td [ style "width" c.width ] <|
+                                                c.viewCell r ( state, config.pipe )
+                                        )
+                                        columns
+                            , if is then
+                                tr []
+                                    [ td [ colspan (List.length columns + 1) ]
+                                        [ subTabular config state (config.getSubTable r) ]
+                                    ]
+
+                              else
+                                text ""
+                            ]
+                        )
+                        rows
             ]
         ]
 
 
-tabularStatic : Config a msg -> State -> List (Row a) -> Html msg
+subTabular : Config a b msg -> State -> List b -> Html msg
+subTabular config state rows =
+    let
+        rs =
+            List.map Row rows
+
+        cols =
+            List.append
+                (iff config.selection [ colSubSelection config.excludeSubSelection config.getSubId rs ] [])
+                config.subColumns
+    in
+    div [ class "table" ]
+        [ table
+            [ class "table is-striped is-hoverable is-fullwidth" ]
+            [ thead []
+                [ tr [] <|
+                    List.indexedMap
+                        (\i (Column c) ->
+                            if i == 0 && config.selection then
+                                th [] (c.viewHeader ( state, config.pipe ))
+
+                            else
+                                th [] (c.viewHeader ( state, config.onChange ))
+                        )
+                        cols
+                ]
+            , tbody [] <|
+                List.map
+                    (\(Row r) ->
+                        tr [] <|
+                            List.map
+                                (\(Column c) ->
+                                    td [ style "width" c.width ] <|
+                                        c.viewCell r ( state, config.pipe )
+                                )
+                                cols
+                    )
+                    rs
+            ]
+        ]
+
+
+tabularStatic : Config a b msg -> State -> List (Row a) -> Html msg
 tabularStatic config state rows =
     let
         columns =

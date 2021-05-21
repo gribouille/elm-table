@@ -23,5 +23,12 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "elm": "*",
+    "elm-analyse": "^0.16.5",
+    "elm-format": "^0.8.5",
+    "elm-review": "^2.5.1",
+    "elm-test": "*"
   }
 }

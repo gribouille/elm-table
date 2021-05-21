@@ -62,4 +62,25 @@
     text-decoration: none;
     color: lightgray;
   }
+
+  .cell-expand {
+    margin: 0;
+    padding: 0;
+    padding-top: 3px;
+  }
+
+  .btn-expand {
+    background: none !important;
+    border: none;
+    color: #069;
+    text-decoration: underline;
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+
+    &:disabled {
+      color: lightgray;
+      cursor: default;
+    }
+  }
 }

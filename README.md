@@ -1,6 +1,6 @@
 # elm-table
 
-ELM table component v2 (in progress...).
+ELM table component v2 (work in progress...).
 
 
 ## Usage
