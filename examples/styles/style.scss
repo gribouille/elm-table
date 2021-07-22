@@ -1,0 +1,20 @@
+@use "bulma";
+@use '~@creativebulma/bulma-tooltip/dist/bulma-tooltip';
+
+@import "../../styles/style";
+
+.example-static {
+  margin: 100px;
+}
+
+.example-dynamic {
+  margin: 100px;
+}
+
+.example-subtable {
+  margin: 100px;
+
+  .example-subtable-toolbar {
+    padding-top: 10px;
+  }
+}

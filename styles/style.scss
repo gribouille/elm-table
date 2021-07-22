@@ -1,47 +1,75 @@
 @use "icons";
 
-.grt {
-  width: 100%;
+.grt-spinner {
+  margin-right: 50%;
+  margin-left: 50%;
+  height: 200px;
+  padding-top: 80px;
+  margin-bottom: 100px;
+}
 
-  .spinner {
-    margin-right: 50%;
-    margin-left: 50%;
-    height: 200px;
-    padding-top: 80px;
-    margin-bottom: 100px;
+.grt-error {
+  color: rgba(255, 0, 0, 0.8);
+  text-align: center;
+  font-style: italic;
+}
+
+.grt-table-header {
+  @extend .field;
+  @extend .is-grouped;
+
+  .header-search {
+    @extend .control;
+    @extend .is-expanded;
+    @extend .has-icons-right;
+    min-width: 200px;
   }
 
-  .error {
-    color: rgba(255, 0, 0, 0.8);
-    text-align: center;
-    font-style: italic;
+  .header-custom {
+    padding-right: 16px;
+    display: flex;
   }
 
-  .header {
-    .toolbar-search {
-      min-width: 200px;
+  .header-toolbar {
+    @extend .control;
+    @extend .field;
+    @extend .is-grouped;
+
+    .toolbar-dropdown {
+      @extend .control;
+      @extend .dropdown;
+      @extend .is-right;
     }
 
-    .toolbar-custom {
+    .button {
+      width: 50px;
+    }
+
+    .dropdown-item {
       padding-right: 16px;
-      display: flex;
+      display: inline-block;
+      width: 192px;
+      white-space: nowrap;
+      overflow: hidden !important;
+      text-overflow: ellipsis;
     }
 
-    .toolbar-table {
-      .button {
-        width: 50px;
-      }
-
-      .dropdown-item {
-        padding-right: 16px;
-      }
-
-      .check {
-        float: right;
-        font-weight: bold;
-        color: green;
-      }
+    .check {
+      float: right;
+      font-weight: bold;
+      color: green;
     }
+  }
+}
+
+.table-content {
+  @extend .table;
+
+  table {
+    @extend .table;
+    @extend .is-striped;
+    @extend .is-hoverable;
+    @extend .is-fullwidth;
   }
 
   .table {
@@ -51,9 +79,9 @@
     }
   }
 
-  .footer {
+  .table-footer {
     margin-top: 10px;
-    margin-bottom: 10px;
+    margin-bottom: 40px;
   }
 
   .is-disabled {
@@ -82,5 +110,28 @@
       color: lightgray;
       cursor: default;
     }
+  }
+
+  .btn-subtable {
+    display: block;
+    padding-top: 10px;
+    height: 16px;
+    width: 16px;
+  }
+
+  .col-selection {
+    padding-top: 10px;
+    input {
+      position: relative;
+      vertical-align: middle;
+    }
+  }
+}
+
+.subtable-content {
+  .subtable-toolbar {
+    height: 30px;
+    display: flex;
+    justify-content: space-between;
   }
 }

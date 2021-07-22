@@ -1,8 +1,7 @@
 module Internal.Util exposing (..)
 
-import Html exposing (Attribute, Html, text)
+import Html exposing (Attribute, Html, b, text)
 import Html.Events exposing (keyCode, on)
-import Http exposing (Error(..))
 import Json.Decode as Json
 
 
@@ -20,25 +19,49 @@ ifh c a =
     iff c a (text "")
 
 
-errStr : String -> Error -> String
-errStr msg err =
-    case err of
-        BadUrl s ->
-            msg ++ ": bad url: " ++ s
-
-        Timeout ->
-            msg ++ ": timeout"
-
-        NetworkError ->
-            msg ++ ": network error"
-
-        BadStatus s ->
-            msg ++ ": bad status: " ++ String.fromInt s
-
-        BadBody s ->
-            msg ++ ": bad body: " ++ s
-
-
 onKeyDown : (Int -> msg) -> Attribute msg
 onKeyDown tagger =
     on "keydown" (Json.map tagger keyCode)
+
+
+find : (a -> Bool) -> List a -> Maybe a
+find predicate list =
+    case list of
+        [] ->
+            Nothing
+
+        first :: rest ->
+            if predicate first then
+                Just first
+
+            else
+                find predicate rest
+
+
+maybe : b -> (a -> b) -> Maybe a -> b
+maybe default fn value =
+    case value of
+        Nothing ->
+            default
+
+        Just x ->
+            fn x
+
+
+ifMaybe : Bool -> a -> Maybe a
+ifMaybe c a =
+    if c then
+        Just a
+
+    else
+        Nothing
+
+
+prependMaybe : Maybe a -> List a -> List a
+prependMaybe m l =
+    case m of
+        Just a ->
+            a :: l
+
+        Nothing ->
+            l

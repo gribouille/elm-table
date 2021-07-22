@@ -1,1002 +1,188 @@
 module Table exposing
-    ( Config, Data, Pipe, Row, Rows(..), State, Status(..), init, loaded
-    , Column(..), Pagination, Sort(..), col, colI, colS, colSubS, errorDefaultView, pagination, withWidth
-    , view, viewHeader, withViewCell
+    ( Model, Row, Rows, RowID, init, loaded, loadedDynamic, loadedStatic, loading, failed
+    , Pipe, State, Pagination, pagination, selected, subSelected
+    , Config, Column, static, dynamic
+    , view, subscriptions
     )
 
-{-| Table component (in progress...).
+{-| Full featured table.
 
 
 # Data
 
-@docs Config, Data, Pipe, Row, Rows, State, Status, init, loaded
+@docs Model, Row, Rows, RowID, init, loaded, loadedDynamic, loadedStatic, loading, failed
 
 
-# Column
+# State
 
-@docs Column, Pagination, Sort, col, colI, colS, colSubS, errorDefaultView, pagination, withWidth
+@docs Pipe, State, Pagination, pagination, selected, subSelected
+
+
+# Configuration
+
+@docs Config, Column, static, dynamic
 
 
 # View
 
-@docs view, viewHeader, withViewCell
+@docs view, subscriptions
 
 -}
 
-import Array
-import Html exposing (..)
-import Html.Attributes exposing (..)
-import Html.Events exposing (onCheck, onClick, onInput)
-import Http exposing (Error)
-import Internal.Util exposing (..)
+import Html exposing (Html)
+import Internal.Column
+import Internal.Config
+import Internal.Data
+import Internal.State
+import Internal.Subscription
+import Internal.Table
+import Table.Types exposing (..)
 
 
-{-| TODO
+{-| Model of component (opaque).
 -}
-type Status a
-    = Loading
-    | Loaded a
-    | Failed String Error
+type alias Model a =
+    Internal.Data.Model a
 
 
-{-| TODO
--}
-type Sort
-    = Ascending
-    | Descending
-    | StandBy
-
-
-{-| TODO
--}
-type Rows a
-    = Static (List (Row a))
-    | Dynamic (Status (Data a))
-
-
-{-| TODO
--}
-type alias Data a =
-    { total : Int
-    , rows : List (Row a)
-    }
-
-
-{-| TODO
--}
-loaded : Int -> List a -> Status (Data a)
-loaded total values =
-    Loaded <| Data total (List.map Row values)
-
-
-type alias RowId =
-    String
-
-
-{-| TODO
--}
-type Row a
-    = Row a
-
-
-{-| TODO
--}
-type Column a msg
-    = Column
-        { name : String
-        , abbrev : String
-        , width : String
-        , sortable : Bool
-        , hiddable : Bool
-        , searchable : Maybe (a -> String)
-        , visible : Bool
-        , viewCell : a -> Pipe msg -> List (Html msg)
-        , viewHeader : Pipe msg -> List (Html msg)
-        , comp : Maybe (a -> a -> Order)
-        }
-
-
-{-| TODO
--}
-type alias Pagination =
-    { search : String
-    , orderBy : String
-    , order : Sort
-    , page : Int
-    , byPage : Int
-    }
-
-
-{-| TODO
+{-| Pipe for the table's messages to change the state.
 -}
 type alias Pipe msg =
-    ( State, State -> msg )
+    Internal.Column.Pipe msg
 
 
-{-| TODO
--}
-type alias Config a b msg =
-    { pipe : State -> msg
-    , columns : List (Column a msg)
-    , pagination : Bool
-    , numsPage : List Int
-    , initialNumPage : Int
-    , searchBar : Bool
-    , selectNumByPage : Bool
-    , hideColumn : Bool
-    , onChange : State -> msg
-    , errorView : String -> Error -> Html msg
-    , toolbar : List (Html msg)
-    , selection : Bool
-    , getId : a -> String
-    , getSubId : b -> String
-    , subColumns : List (Column b msg)
-    , getSubTable : a -> List b
-    , excludeSubSelection : Bool
-    }
-
-
-{-| TODO
+{-| Internal table's state.
 -}
 type alias State =
-    { visibleColumns : List String
-    , orderBy : Maybe String
-    , order : Sort
-    , page : Int
-    , byPage : Int
-    , search : String
-    , btPagination : Bool
-    , btColumns : Bool
-    , tmp : String
-    , selected : List RowId
-    , subSelected : List RowId
-    , expand : List RowId
-    }
+    Internal.State.State
 
 
-{-| TODO
+{-| Table's configuration (opaque).
 -}
-pagination : State -> Pagination
-pagination state =
-    Pagination state.search
-        (Maybe.withDefault "" state.orderBy)
-        state.order
-        state.page
-        state.byPage
+type alias Config a b msg =
+    Internal.Config.Config a b msg
 
 
-{-| TODO
+{-| Column's configuration (opaque).
 -}
-init : Config a b msg -> State
-init config =
-    { visibleColumns =
-        List.filterMap
-            (\(Column c) ->
-                iff c.visible (Just c.name) Nothing
-            )
-            config.columns
-    , orderBy = Nothing
-    , order = Ascending
-    , page = 0
-    , byPage = config.initialNumPage
-    , search = ""
-    , btPagination = False
-    , btColumns = False
-    , tmp = ""
-    , selected = []
-    , subSelected = []
-    , expand = []
-    }
+type alias Column a msg =
+    Internal.Column.Column a msg
 
 
-{-| TODO
+{-| Table's row (opaque).
 -}
-col :
-    (a -> a -> Order)
-    -> (a -> Html msg)
-    -> String
-    -> String
-    -> Bool
-    -> Bool
-    -> Maybe (a -> String)
-    -> Column a msg
-col comp viewCell title_ abbrev sortable hiddable searchable =
-    Column
-        { name = title_
-        , abbrev = abbrev
-        , width = ""
-        , sortable = sortable
-        , searchable = searchable
-        , visible = True
-        , hiddable = hiddable
-        , viewCell = \x _ -> [ viewCell x ]
-        , viewHeader = viewHeader abbrev title_ sortable
-        , comp = Just comp
-        }
+type alias Row a =
+    Internal.Data.Row a
 
 
-{-| TODO
+{-| List of table's rows (opaque).
 -}
-colI : (a -> Int) -> String -> String -> Bool -> Bool -> Column a msg
-colI get title_ abbrev sortable hiddable =
-    Column
-        { name = title_
-        , abbrev = abbrev
-        , width = ""
-        , sortable = sortable
-        , searchable = Just (get >> String.fromInt)
-        , visible = True
-        , hiddable = hiddable
-        , viewCell = \x _ -> [ text <| String.fromInt (get x) ]
-        , viewHeader = viewHeader abbrev title_ sortable
-        , comp = Just <| \a b -> compare (get a) (get b)
-        }
+type alias Rows a =
+    Internal.Data.Rows a
 
 
-{-| TODO
+{-| Unique ID of one row.
 -}
-colS : (a -> String) -> String -> String -> Bool -> Bool -> Column a msg
-colS get title_ abbrev sortable hiddable =
-    Column
-        { name = title_
-        , abbrev = abbrev
-        , width = ""
-        , sortable = sortable
-        , searchable = Just get
-        , visible = True
-        , hiddable = hiddable
-        , viewCell = \x _ -> [ text (get x) ]
-        , viewHeader = viewHeader abbrev title_ sortable
-        , comp = Just <| \a b -> compare (get a) (get b)
-        }
+type alias RowID =
+    Internal.State.RowID
 
 
-{-| TODO
+{-| Pagination values.
 -}
-colSubS : (a -> String) -> String -> String -> Column a msg
-colSubS get title_ abbrev =
-    Column
-        { name = title_
-        , abbrev = abbrev
-        , width = ""
-        , sortable = False
-        , searchable = Nothing
-        , visible = True
-        , hiddable = True
-        , viewCell = \x _ -> [ text (get x) ]
-        , viewHeader = viewHeader abbrev title_ False
-        , comp = Just <| \a b -> compare (get a) (get b)
-        }
+type alias Pagination =
+    Internal.State.Pagination
 
 
-colSubSelection : Bool -> (a -> String) -> List (Row a) -> Column a msg
-colSubSelection exclude getId rows =
-    Column
-        { name = ""
-        , abbrev = ""
-        , width = "10px"
-        , sortable = False
-        , searchable = Nothing
-        , visible = True
-        , hiddable = False
-        , viewCell = colSubSelectionViewCell exclude getId
-        , viewHeader = colSubSelectionViewHeader exclude getId rows
-        , comp = Nothing
-        }
-
-
-colSubSelectionViewCell : Bool -> (a -> String) -> a -> Pipe msg -> List (Html msg)
-colSubSelectionViewCell exclude getId a ( s, pipe ) =
-    [ input
-        [ class "checkbox"
-        , type_ "checkbox"
-        , checked (List.member (getId a) s.subSelected)
-        , onCheck
-            (\b ->
-                pipe
-                    { s
-                        | subSelected =
-                            iff b
-                                (getId a :: s.subSelected)
-                                (List.filter (\x -> x /= getId a) s.subSelected)
-                        , selected = iff exclude [] s.selected
-                    }
-            )
-        ]
-        []
-    ]
-
-
-colSubSelectionViewHeader : Bool -> (a -> String) -> List (Row a) -> Pipe msg -> List (Html msg)
-colSubSelectionViewHeader exclude getId rows ( s, pipe ) =
-    [ input
-        [ class "checkbox"
-        , type_ "checkbox"
-        , onCheck
-            (\b ->
-                let
-                    ids =
-                        List.map (\(Row a) -> getId a) rows
-                in
-                pipe
-                    { s
-                        | subSelected =
-                            iff b
-                                (ids ++ s.subSelected)
-                                (List.filter (\x -> not (List.member x ids)) s.subSelected)
-                        , selected = iff exclude [] s.selected
-                    }
-            )
-        ]
-        []
-    ]
-
-
-colSelection : Bool -> (a -> String) -> List (Row a) -> Column a msg
-colSelection exclude getId rows =
-    Column
-        { name = ""
-        , abbrev = ""
-        , width = "10px"
-        , sortable = False
-        , searchable = Nothing
-        , visible = True
-        , hiddable = False
-        , viewCell = colSelectionViewCell exclude getId
-        , viewHeader = colSelectionViewHeader exclude getId rows
-        , comp = Nothing
-        }
-
-
-colSelectionViewCell : Bool -> (a -> String) -> a -> Pipe msg -> List (Html msg)
-colSelectionViewCell exclude getId a ( s, pipe ) =
-    [ input
-        [ class "checkbox"
-        , type_ "checkbox"
-        , checked (List.member (getId a) s.selected)
-        , onCheck
-            (\b ->
-                pipe
-                    { s
-                        | selected =
-                            iff b
-                                (getId a :: s.selected)
-                                (List.filter (\x -> x /= getId a) s.selected)
-                        , subSelected =
-                            iff exclude [] s.subSelected
-                    }
-            )
-        ]
-        []
-    ]
-
-
-colSelectionViewHeader : Bool -> (a -> String) -> List (Row a) -> Pipe msg -> List (Html msg)
-colSelectionViewHeader exclude getId rows ( s, pipe ) =
-    [ input
-        [ class "checkbox"
-        , type_ "checkbox"
-        , onCheck
-            (\b ->
-                pipe
-                    { s
-                        | selected =
-                            iff b
-                                (List.map (\(Row a) -> getId a) rows)
-                                []
-                        , subSelected =
-                            iff exclude [] s.subSelected
-                    }
-            )
-        ]
-        []
-    ]
-
-
-{-| TODO
+{-| Table's view.
 -}
-withWidth : String -> Column a msg -> Column a msg
-withWidth w (Column c) =
-    Column { c | width = w }
+view : Config a b msg -> Model a -> Html msg
+view =
+    Internal.Table.view
 
 
-{-| TODO
+{-| Initialize the table's model.
 -}
-withViewCell : (a -> Pipe msg -> List (Html msg)) -> Column a msg -> Column a msg
-withViewCell f (Column c) =
-    Column { c | viewCell = f }
+init : Config a b msg -> Model a
+init =
+    Internal.Table.init
 
 
-{-| TODO
+{-| Load the data in the model with the total number of rows if the data are
+incomplete.
 -}
-viewHeader : String -> String -> Bool -> Pipe msg -> List (Html msg)
-viewHeader abbrev title_ sortable ( state, pipe ) =
-    [ iff (String.isEmpty abbrev)
-        (span [] [ text title_ ])
-        (abbr [ title title_ ] [ text abbrev ])
-    , iff sortable
-        (iff (state.orderBy == Just title_)
-            (a
-                [ class "sort"
-                , onClick <| pipe { state | order = nextOrder state.order }
-                ]
-                [ text <|
-                    case state.order of
-                        Ascending ->
-                            "↿"
-
-                        Descending ->
-                            "⇂"
-
-                        StandBy ->
-                            "⇅"
-                ]
-            )
-            (a
-                [ class "sort"
-                , onClick <| pipe { state | order = Ascending, orderBy = Just title_ }
-                ]
-                [ text "⇅" ]
-            )
-        )
-        (text "")
-    ]
+loaded : Model a -> List a -> Int -> Model a
+loaded =
+    Internal.Data.loaded
 
 
-
---
--- VIEW
---
-
-
-{-| TODO
+{-| Similar to `loaded`. Load partial data in the model and specified the total
+number of rows.
 -}
-view : Config a b msg -> State -> Rows a -> Html msg
-view config state rows_ =
-    case rows_ of
-        Dynamic res ->
-            div [ class "grt" ] <|
-                header config config.onChange state
-                    :: (case res of
-                            Loading ->
-                                [ div
-                                    [ class "spinner" ]
-                                    [ span [ class "gg-spinner" ] [] ]
-                                ]
-
-                            Loaded { total, rows } ->
-                                [ tabularDynamic config state total rows
-                                , footer config.onChange state total
-                                ]
-
-                            Failed msg err ->
-                                [ config.errorView msg err ]
-                       )
-
-        Static rows ->
-            div [ class "grt" ]
-                [ header config config.pipe state
-                , tabularStatic config state rows
-                , footer config.pipe state (List.length rows)
-                ]
+loadedDynamic : List a -> Int -> Model a -> Model a
+loadedDynamic rows total model =
+    Internal.Data.loaded model rows total
 
 
-
--- Header
-
-
-header : Config a b msg -> (State -> msg) -> State -> Html msg
-header config pipe state =
-    div [ class "field is-grouped header" ]
-        [ search config.pipe pipe state
-        , div [ class "toolbar-custom" ] config.toolbar
-        , toolbar config state
-        ]
-
-
-search : (State -> msg) -> (State -> msg) -> State -> Html msg
-search pipe pipeValid state =
-    div [ class "control is-expanded has-icons-right toolbar-search" ]
-        [ input
-            [ class "input"
-            , type_ "text"
-            , placeholder "Search..."
-            , onInput (\s -> pipe { state | tmp = s })
-            , onKeyDown (\i -> iff (i == 13) (pipeValid { state | search = state.tmp }) (pipe state))
-            ]
-            []
-        , span [ class "icon is-right" ] [ i [ class "gg-search" ] [] ]
-        ]
-
-
-toolbar : Config a b msg -> State -> Html msg
-toolbar config state =
-    div [ class "control field is-grouped toolbar-table" ] <|
-        [ menuPagination config state
-        , menuColumns config state
-        ]
-
-
-menuColumns : Config a b msg -> State -> Html msg
-menuColumns config state =
-    dropdown
-        "gg-menu-grid-r"
-        "Columns"
-        (config.pipe { state | btColumns = not state.btColumns, btPagination = False })
-        state.btColumns
-        (List.filterMap
-            (\(Column c) ->
-                let
-                    chk =
-                        List.any ((==) c.name) state.visibleColumns
-
-                    msg =
-                        config.pipe
-                            { state
-                                | visibleColumns =
-                                    iff chk
-                                        (List.filter ((/=) c.name) state.visibleColumns)
-                                        (c.name :: state.visibleColumns)
-                            }
-                in
-                iff c.hiddable
-                    (Just
-                        (a
-                            [ class "dropdown-item"
-                            , onClick msg
-                            , href ""
-                            ]
-                            [ text c.name
-                            , input
-                                [ class "is-checkradio is-pulled-right"
-                                , type_ "checkbox"
-                                , checked chk
-                                , onCheck (\_ -> msg)
-                                ]
-                                []
-                            ]
-                        )
-                    )
-                    Nothing
-            )
-            config.columns
-        )
-
-
-menuPagination : Config a b msg -> State -> Html msg
-menuPagination config state =
-    dropdown
-        "gg-stories"
-        "Pagination"
-        (config.pipe
-            { state
-                | btPagination = not state.btPagination
-                , btColumns = False
-            }
-        )
-        state.btPagination
-        (List.map
-            (\i ->
-                a
-                    [ class "dropdown-item"
-                    , onClick (config.onChange { state | byPage = i })
-                    , href ""
-                    ]
-                    [ text (String.fromInt i)
-                    , iff (i == state.byPage)
-                        (span [ class "check" ] [ text "✓" ])
-                        (text "")
-                    ]
-            )
-            config.numsPage
-        )
-
-
-dropdown : String -> String -> msg -> Bool -> List (Html msg) -> Html msg
-dropdown btn tt msg active items =
-    div [ class <| "control dropdown is-right" ++ iff active " is-active" "" ]
-        [ div [ class "dropdown-trigger" ]
-            [ a
-                [ class "button has-tooltip-arrow"
-                , attribute "data-tooltip" tt
-                , attribute "aria-haspopup" "true"
-                , attribute "aria-controls" "dropdown-menu"
-                , onClick msg
-                , href ""
-                ]
-                [ i [ class btn ] [] ]
-            ]
-        , div
-            [ class "dropdown-menu"
-            , id "dropdown-menu"
-            , attribute "role" "menu"
-            ]
-            [ div [ class "dropdown-content" ] items ]
-        ]
-
-
-
--- Table
-
-
-tabularDynamic : Config a b msg -> State -> Int -> List (Row a) -> Html msg
-tabularDynamic config state _ rows =
-    let
-        columns =
-            List.append
-                (iff config.selection
-                    [ colSelection
-                        config.excludeSubSelection
-                        config.getId
-                        rows
-                    ]
-                    []
-                )
-            <|
-                List.filter
-                    (\(Column c) -> List.member c.name state.visibleColumns)
-                    config.columns
-    in
-    div [ class "table" ]
-        [ table [ class "table is-striped is-hoverable is-fullwidth" ]
-            [ thead []
-                [ tr [] <|
-                    th [] []
-                        :: List.indexedMap
-                            (\i (Column c) ->
-                                if i == 0 && config.selection then
-                                    th [] (c.viewHeader ( state, config.pipe ))
-
-                                else
-                                    th [] (c.viewHeader ( state, config.onChange ))
-                            )
-                            columns
-                ]
-            , tbody [] <|
-                List.concat <|
-                    List.map
-                        (\(Row r) ->
-                            let
-                                id =
-                                    config.getId r
-
-                                is =
-                                    List.member id state.expand
-                            in
-                            [ tr [] <|
-                                td [ class "cell-expand" ]
-                                    [ button
-                                        [ class "btn-expand"
-                                        , disabled (List.length (config.getSubTable r) == 0)
-                                        , onClick
-                                            (config.pipe
-                                                { state
-                                                    | expand =
-                                                        iff is
-                                                            (List.filter (\x -> x /= id) state.expand)
-                                                            (id :: state.expand)
-                                                }
-                                            )
-                                        ]
-                                        [ i [ class <| iff is "gg-corner-down-right" "gg-plus" ] [] ]
-                                    ]
-                                    :: List.map
-                                        (\(Column c) ->
-                                            td [ style "width" c.width ] <|
-                                                c.viewCell r ( state, config.pipe )
-                                        )
-                                        columns
-                            , if is then
-                                tr []
-                                    [ td [ colspan (List.length columns + 1) ]
-                                        [ subTabular config state (config.getSubTable r) ]
-                                    ]
-
-                              else
-                                text ""
-                            ]
-                        )
-                        rows
-            ]
-        ]
-
-
-subTabular : Config a b msg -> State -> List b -> Html msg
-subTabular config state rows =
-    let
-        rs =
-            List.map Row rows
-
-        cols =
-            List.append
-                (iff config.selection [ colSubSelection config.excludeSubSelection config.getSubId rs ] [])
-                config.subColumns
-    in
-    div [ class "table" ]
-        [ table
-            [ class "table is-striped is-hoverable is-fullwidth" ]
-            [ thead []
-                [ tr [] <|
-                    List.indexedMap
-                        (\i (Column c) ->
-                            if i == 0 && config.selection then
-                                th [] (c.viewHeader ( state, config.pipe ))
-
-                            else
-                                th [] (c.viewHeader ( state, config.onChange ))
-                        )
-                        cols
-                ]
-            , tbody [] <|
-                List.map
-                    (\(Row r) ->
-                        tr [] <|
-                            List.map
-                                (\(Column c) ->
-                                    td [ style "width" c.width ] <|
-                                        c.viewCell r ( state, config.pipe )
-                                )
-                                cols
-                    )
-                    rs
-            ]
-        ]
-
-
-tabularStatic : Config a b msg -> State -> List (Row a) -> Html msg
-tabularStatic config state rows =
-    let
-        columns =
-            List.filter
-                (\(Column c) -> List.member c.name state.visibleColumns)
-                config.columns
-
-        srows =
-            iff
-                (String.isEmpty state.search)
-                rows
-                (List.filter
-                    (\(Row a) ->
-                        List.any
-                            (\(Column c) ->
-                                case c.searchable of
-                                    Nothing ->
-                                        False
-
-                                    Just fn ->
-                                        String.contains state.search (fn a)
-                            )
-                            config.columns
-                    )
-                    rows
-                )
-
-        frows =
-            srows
-                |> sort config.columns state
-                |> Array.fromList
-                |> Array.slice (state.page * state.byPage) ((state.page + 1) * state.byPage)
-                |> Array.toList
-    in
-    div [ class "tabular" ]
-        [ table [ class "table is-striped is-hoverable is-fullwidth" ]
-            [ thead []
-                [ tr [] <|
-                    List.map
-                        (\(Column c) ->
-                            th [] (c.viewHeader ( state, config.pipe ))
-                        )
-                        columns
-                ]
-            , tbody [] <|
-                List.map
-                    (\(Row r) ->
-                        tr []
-                            (List.map
-                                (\(Column c) ->
-                                    td [ style "width" c.width ] <|
-                                        c.viewCell r ( state, config.pipe )
-                                )
-                                columns
-                            )
-                    )
-                    frows
-            ]
-        ]
-
-
-
--- Footer
-
-
-footer : (State -> msg) -> State -> Int -> Html msg
-footer pipe state total =
-    let
-        nb =
-            floor (toFloat total / toFloat state.byPage) + 1
-
-        ( ia, ib, ic ) =
-            pagIndex nb state.page
-    in
-    div [ class "footer" ]
-        [ nav
-            [ class "pagination is-centered"
-            , attribute "role" "navigation"
-            , attribute "aria-label" "pagination"
-            ]
-            [ ifh (nb > 1) <|
-                a
-                    [ class <| "pagination-previous" ++ iff (state.page == 0) " is-disabled" ""
-                    , onClick <| pipe { state | page = state.page - 1 }
-                    , href ""
-                    ]
-                    [ text "Previous" ]
-            , ifh (nb > 1) <|
-                a
-                    [ class <| "pagination-next" ++ iff (state.page == nb - 1) " is-disabled" ""
-                    , onClick <| pipe { state | page = state.page + 1 }
-                    , href ""
-                    ]
-                    [ text "Next page" ]
-            , ul [ class "pagination-list" ]
-                -- First page
-                [ ifh (nb > 3) <|
-                    a
-                        [ class <| "pagination-link " ++ iff (state.page == 0) "is-current" ""
-                        , attribute "aria-label" "Goto page 1"
-                        , attribute "aria-current" <| iff (state.page == 0) "page" ""
-                        , onClick <| pipe { state | page = 0 }
-                        , href ""
-                        ]
-                        [ text "1" ]
-                , ifh (nb > 3) <| span [ class "pagination-ellipsis" ] [ text "…" ]
-
-                -- Middle (m-1) m (m+1)
-                , ifh (nb > 2) <|
-                    a
-                        [ class <| "pagination-link " ++ iff (state.page == ia) "is-current" ""
-                        , attribute "aria-label" <| "Goto page " ++ String.fromInt (ia + 1)
-                        , attribute "aria-current" <| iff (state.page == ia) "page" ""
-                        , onClick <| pipe { state | page = ia }
-                        , href ""
-                        ]
-                        [ text <| String.fromInt (ia + 1) ]
-                , ifh (nb > 0) <|
-                    a
-                        [ class <| "pagination-link " ++ iff (state.page == ib) "is-current" ""
-                        , attribute "aria-label" <| "Goto page " ++ String.fromInt (ib + 1)
-                        , attribute "aria-current" <| iff (state.page == ib) "page" ""
-                        , onClick <| pipe { state | page = ib }
-                        , href ""
-                        ]
-                        [ text <| String.fromInt (ib + 1) ]
-                , ifh (nb > 1) <|
-                    a
-                        [ class <| "pagination-link " ++ iff (state.page == ic) "is-current" ""
-                        , attribute "aria-label" <| "Goto page " ++ String.fromInt (ic + 1)
-                        , attribute "aria-current" <| iff (state.page == ic) "page" ""
-                        , onClick <| pipe { state | page = ic }
-                        , href ""
-                        ]
-                        [ text <| String.fromInt (ic + 1) ]
-
-                -- Last page
-                , ifh (nb > 4) <| span [ class "pagination-ellipsis" ] [ text "…" ]
-                , ifh (nb > 4) <|
-                    a
-                        [ class <| "pagination-link " ++ iff (state.page == nb - 1) "is-current" ""
-                        , attribute "aria-label" <| "Goto page " ++ String.fromInt nb
-                        , onClick <| pipe { state | page = nb - 1 }
-                        , href ""
-                        ]
-                        [ text <| String.fromInt nb ]
-                ]
-            ]
-        ]
-
-
-pagIndex : Int -> Int -> ( Int, Int, Int )
-pagIndex n c =
-    if c == 0 then
-        if n > 3 then
-            let
-                m =
-                    floor (toFloat n / 2)
-            in
-            ( m - 1, m, m + 1 )
-
-        else
-            ( 0, 1, 2 )
-
-    else if c == 1 then
-        if n > 3 then
-            ( 1, 2, 3 )
-
-        else
-            ( 0, 1, 2 )
-
-    else if c == n - 1 then
-        if n > 3 then
-            ( n - 4, n - 3, n - 2 )
-
-        else
-            ( n - 3, n - 2, n - 1 )
-
-    else if c == n - 2 then
-        ( n - 4, n - 3, n - 2 )
-
-    else
-        ( c - 1, c, c + 1 )
-
-
-{-| TODO
+{-| Similar to `loaded` with all data so `List.length rows == total`.
 -}
-errorDefaultView : String -> Error -> Html msg
-errorDefaultView msg err =
-    div [ class "error" ] [ text (errStr msg err) ]
+loadedStatic : List a -> Model a -> Model a
+loadedStatic rows model =
+    Internal.Data.loaded model rows (List.length rows)
 
 
-
---
--- SORT
---
-
-
-sort : List (Column a msg) -> State -> List (Row a) -> List (Row a)
-sort columns state rows =
-    let
-        comp =
-            Maybe.andThen (\(Column c) -> c.comp) <|
-                find (\(Column c) -> Just c.name == state.orderBy) columns
-    in
-    case comp of
-        Nothing ->
-            rows
-
-        Just fn ->
-            sortRowsFromStatus fn state.order rows
+{-| Data loading is in progress.
+-}
+loading : Model a -> Model a
+loading =
+    Internal.Data.loading
 
 
-sortRowsFromStatus : (a -> a -> Order) -> Sort -> List (Row a) -> List (Row a)
-sortRowsFromStatus comp order rows =
-    case order of
-        StandBy ->
-            rows
-
-        Descending ->
-            sortRows comp rows
-
-        Ascending ->
-            List.reverse (sortRows comp rows)
+{-| Data loading has failed.
+-}
+failed : Model a -> String -> Model a
+failed =
+    Internal.Data.failed
 
 
-sortRows : (a -> a -> Order) -> List (Row a) -> List (Row a)
-sortRows comp rows =
-    List.sortWith (\(Row a) (Row b) -> comp a b) rows
+{-| Get the pagination values from model.
+-}
+pagination : Model a -> Pagination
+pagination =
+    Internal.Data.pagination
 
 
-find : (a -> Bool) -> List a -> Maybe a
-find predicate list =
-    case list of
-        [] ->
-            Nothing
-
-        first :: rest ->
-            if predicate first then
-                Just first
-
-            else
-                find predicate rest
+{-| Table's subscriptions.
+-}
+subscriptions : Config a b msg -> Model a -> Sub msg
+subscriptions =
+    Internal.Subscription.subscriptions
 
 
-nextOrder : Sort -> Sort
-nextOrder status =
-    case status of
-        StandBy ->
-            Descending
+{-| Define a configuration for a table with static data (i.e. with all loaded
+data at once).
+-}
+static : (Model a -> msg) -> (a -> String) -> List (Column a msg) -> Config a () msg
+static =
+    Internal.Config.static
 
-        Descending ->
-            Ascending
 
-        Ascending ->
-            Descending
+{-| Define a configuration for a table with dynamic data (i.e. with paginated
+loaded data).
+-}
+dynamic : (Model a -> msg) -> (Model a -> msg) -> (a -> String) -> List (Column a msg) -> Config a () msg
+dynamic =
+    Internal.Config.dynamic
+
+
+{-| Return the list of selected rows.
+-}
+selected : Model a -> List RowID
+selected =
+    Internal.Data.selected
+
+
+{-| Return the list of selected rows in the sub tables.
+-}
+subSelected : Model a -> List RowID
+subSelected =
+    Internal.Data.subSelected

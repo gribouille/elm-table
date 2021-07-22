@@ -1,6 +1,6 @@
 # elm-table
 
-ELM table component v2 (work in progress...).
+Full features ELM table component.
 
 
 ## Usage
@@ -15,10 +15,7 @@ Install the ELM package and the NPM package for the styles:
 Include the SASS styles from `node_modules/elm-table/styles/style.scss`.
 
 
-```
-```
-
-## Example
+## Examples
 
 To start the examples in dev mode:
 ```
@@ -35,16 +32,26 @@ To build the examples:
 npm run dist
 ```
 
+
 ## Documentation
 
 See the documentation [here](http://package.elm-lang.org/packages/gribouille/elm-table/latest).
 
 
+## Todo
+
+- [ ] Intline CSS
+- [ ] JS API
+- [ ] _load more_ pagination
+- [ ] pagination for subtable
+- [ ] dynamic subtable data
+- [ ] Tailwind style
+- [ ] Bootstrap style
+
 
 ## Contributing
 
 Feedback and contributions are very welcome.
-
 
 
 ## License
