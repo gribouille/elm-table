@@ -3,9 +3,12 @@
     "name": "gribouille/elm-table",
     "summary": "Table component",
     "license": "MPL-2.0",
-    "version": "5.0.0",
+    "version": "5.1.0",
     "exposed-modules": [
-        "Table"
+        "Table",
+        "Table.Column",
+        "Table.Config",
+        "Table.Types"
     ],
     "elm-version": "0.19.0 <= v < 0.20.0",
     "dependencies": {
