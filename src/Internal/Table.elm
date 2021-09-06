@@ -231,11 +231,11 @@ tableContentHead hasSelection pipeExt pipeInt columns state =
             List.indexedMap
                 (\i ((Column c) as col) ->
                     if i == 0 && hasSelection then
-                        th [ class c.class, style "width" c.width ] <|
+                        th [ style "width" c.width ] <|
                             c.viewHeader col ( state, pipeInt )
 
                     else
-                        th [ class c.class, style "width" c.width ] <|
+                        th [ style "width" c.width ] <|
                             c.viewHeader col ( state, pipeExt )
                 )
                 columns

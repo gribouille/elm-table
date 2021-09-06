@@ -3,7 +3,7 @@
     "name": "gribouille/elm-table",
     "summary": "Table component",
     "license": "MPL-2.0",
-    "version": "5.1.0",
+    "version": "5.1.1",
     "exposed-modules": [
         "Table",
         "Table.Column",
