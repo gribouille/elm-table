@@ -1,5 +1,5 @@
 module Table exposing
-    ( Model, Row, Rows, RowID, init, loaded, loadedDynamic, loadedStatic, loading, failed
+    ( Model, Row, Rows, RowID, get, init, loaded, loadedDynamic, loadedStatic, loading, failed
     , Pipe, State, Pagination, pagination, selected, subSelected
     , Config, Column, static, dynamic
     , view, subscriptions
@@ -10,7 +10,7 @@ module Table exposing
 
 # Data
 
-@docs Model, Row, Rows, RowID, init, loaded, loadedDynamic, loadedStatic, loading, failed
+@docs Model, Row, Rows, RowID, get, init, loaded, loadedDynamic, loadedStatic, loading, failed
 
 
 # State
@@ -105,6 +105,13 @@ view =
 init : Config a b msg -> Model a
 init =
     Internal.Table.init
+
+
+{-| Get the loaded data.
+-}
+get : Model a -> List a
+get =
+    Internal.Data.get
 
 
 {-| Load the data in the model with the total number of rows if the data are

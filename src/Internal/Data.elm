@@ -29,6 +29,16 @@ type Rows a
         )
 
 
+get : Model a -> List a
+get (Model model) =
+    case model.rows of
+        Rows (Loaded { rows }) ->
+            rows |> List.map (\(Row x) -> x)
+
+        _ ->
+            []
+
+
 loaded : Model a -> List a -> Int -> Model a
 loaded (Model model) rows n =
     Model { model | rows = Rows <| Loaded { total = n, rows = List.map Row rows } }
