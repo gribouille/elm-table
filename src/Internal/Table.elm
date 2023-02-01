@@ -85,9 +85,9 @@ view config ((Model m) as model) =
                 ]
 
             Rows (Loaded { total, rows }) ->
-                [ tableHeader config pipeInt pipeExt m.state
+                [ tableHeader config pipeExt pipeInt m.state
                 , tableContent config pipeExt pipeInt m.state rows
-                , tableFooter config pipeInt pipeExt m.state total
+                , tableFooter config pipeExt pipeInt m.state total
                 ]
 
             Rows (Failed msg) ->
@@ -379,7 +379,7 @@ subtableContentBodyRow pipeExt cfg columns state (Row r) =
 
 
 tableFooter : Config a b msg -> Pipe msg -> Pipe msg -> State -> Int -> Html msg
-tableFooter (Config cfg) pipeInt pipeExt state total =
+tableFooter (Config cfg) pipeExt pipeInt state total =
     if cfg.pagination == None then
         text ""
 
