@@ -1,6 +1,6 @@
 module Table exposing
     ( Model, Row, Rows, RowID, get, init, loaded, loadedDynamic, loadedStatic, loading, failed
-    , Pipe, State, Pagination, pagination, selected, subSelected
+    , Pipe, State, Pagination, pagination, selected, subSelected, setPagination
     , Config, Column, static, dynamic
     , view, subscriptions
     )
@@ -15,7 +15,7 @@ module Table exposing
 
 # State
 
-@docs Pipe, State, Pagination, pagination, selected, subSelected
+@docs Pipe, State, Pagination, pagination, selected, subSelected, setPagination
 
 
 # Configuration
@@ -193,3 +193,10 @@ selected =
 subSelected : Model a -> List RowID
 subSelected =
     Internal.Data.subSelected
+
+
+{-| Set manually the table pagination values.
+-}
+setPagination : Model a -> Pagination -> Model a
+setPagination =
+    Internal.Data.setPagination

@@ -11,7 +11,7 @@ import Json.Decode as Decode
 subscriptions : Config a b msg -> Model a -> Sub msg
 subscriptions config model =
     if isModal model then
-        Browser.Events.onMouseDown (outsideTarget (pipeInternal config model) "dropdown")
+        Browser.Events.onMouseDown (outsideTarget (pipeInt config model) "dropdown")
 
     else
         Sub.none

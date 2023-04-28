@@ -12,8 +12,8 @@ import Internal.Util exposing (..)
 import Table.Types exposing (..)
 
 
-tableFooterContent : Type -> Pipe msg -> Pipe msg -> Int -> Int -> Int -> Html msg
-tableFooterContent type_ pipeInt pipeExt byPage page total =
+tableFooterContent : (Action -> Pipe msg) -> Int -> Int -> Int -> Html msg
+tableFooterContent pipe byPage page total =
     let
         nb =
             ceiling (toFloat total / toFloat byPage)
@@ -21,8 +21,8 @@ tableFooterContent type_ pipeInt pipeExt byPage page total =
         ( ia, ib, ic ) =
             iff (nb == 1) ( 0, 0, 0 ) (pagIndex nb page)
 
-        pipe =
-            iff (type_ == Static) pipeInt pipeExt
+        p =
+            pipe ChangePageIndex
     in
     div [ class "table-footer" ]
         [ nav
@@ -33,28 +33,28 @@ tableFooterContent type_ pipeInt pipeExt byPage page total =
             [ ifh (nb > 1) <|
                 a
                     [ class <| "pagination-previous" ++ iff (page == 0) " is-disabled" ""
-                    , onClick <| pipe <| \state -> { state | page = state.page - 1 }
+                    , onClick <| p <| \state -> { state | page = state.page - 1 }
                     ]
                     [ text "Previous" ]
             , ifh (nb > 1) <|
                 a
                     [ class <| "pagination-next" ++ iff (page == nb - 1) " is-disabled" ""
-                    , onClick <| pipe <| \state -> { state | page = page + 1 }
+                    , onClick <| p <| \state -> { state | page = page + 1 }
                     ]
                     [ text "Next page" ]
             , ul [ class "pagination-list" ]
                 -- First page
-                [ ifh (nb > 3) <| paginationLink pipe page 0
+                [ ifh (nb > 3) <| paginationLink p page 0
                 , ifh (nb > 3) <| paginationEllipsis
 
                 -- Middle (m-1) m (m+1)
-                , ifh (nb > 1) <| paginationLink pipe page ia
-                , ifh (nb > 0) <| paginationLink pipe page ib
-                , ifh (nb > 2) <| paginationLink pipe page ic
+                , ifh (nb > 1) <| paginationLink p page ia
+                , ifh (nb > 0) <| paginationLink p page ib
+                , ifh (nb > 2) <| paginationLink p page ic
 
                 -- Last page
                 , ifh (nb > 4) <| paginationEllipsis
-                , ifh (nb > 4) <| paginationLink pipe page (nb - 1)
+                , ifh (nb > 4) <| paginationLink p page (nb - 1)
                 ]
             ]
         ]

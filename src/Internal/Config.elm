@@ -5,6 +5,7 @@ import Html.Attributes exposing (class)
 import Internal.Column exposing (..)
 import Internal.Data exposing (..)
 import Internal.State exposing (..)
+import Internal.Util exposing (iff)
 import Table.Types exposing (..)
 
 
@@ -32,6 +33,7 @@ type alias ConfigInternal a b msg =
     , subtable : Maybe (SubTable a b msg)
     , errorView : String -> Html msg
     , toolbar : List (Html msg)
+    , actions : List Action
     }
 
 
@@ -54,6 +56,7 @@ config t s oe oi c =
         , subtable = Nothing
         , errorView = errorView
         , toolbar = []
+        , actions = []
         }
 
 
@@ -69,6 +72,7 @@ static onChange getID columns =
         , subtable = Nothing
         , errorView = errorView
         , toolbar = []
+        , actions = []
         }
 
 
@@ -84,6 +88,7 @@ dynamic onChangeExt onChangeInt getID columns =
         , subtable = Nothing
         , errorView = errorView
         , toolbar = []
+        , actions = [ SearchEnter ]
         }
 
 
@@ -94,6 +99,11 @@ withExpand col (Config c) =
             c.table
     in
     Config { c | table = { t | expand = Just col } }
+
+
+withActions : List Action -> Config a b msg -> Config a b msg
+withActions actions (Config c) =
+    Config { c | actions = actions }
 
 
 withSelection : Selection -> Config a b msg -> Config a b msg
@@ -164,6 +174,7 @@ withSubtable getValues getID columns expand (Config c) =
         , subtable = Just <| SubTable getValues { columns = columns, getID = getID, expand = expand }
         , errorView = c.errorView
         , toolbar = c.toolbar
+        , actions = c.actions
         }
 
 
@@ -172,11 +183,11 @@ errorView msg =
     div [ class "table-data-error" ] [ text msg ]
 
 
-pipeInternal : Config a b msg -> Model a -> Pipe msg
-pipeInternal (Config { onChangeInt }) (Model { rows, state }) fn =
+pipeFn : Config a b msg -> Model a -> Action -> Pipe msg
+pipeFn (Config { onChangeInt, onChangeExt, actions }) (Model { rows, state }) action fn =
+    iff (List.member action actions) onChangeExt onChangeInt <| Model { rows = rows, state = fn state }
+
+
+pipeInt : Config a b msg -> Model a -> Pipe msg
+pipeInt (Config { onChangeInt }) (Model { rows, state }) fn =
     onChangeInt <| Model { rows = rows, state = fn state }
-
-
-pipeExternal : Config a b msg -> Model a -> Pipe msg
-pipeExternal (Config { onChangeExt }) (Model { rows, state }) fn =
-    onChangeExt <| Model { rows = rows, state = fn state }

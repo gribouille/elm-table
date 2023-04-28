@@ -9,32 +9,33 @@ import Internal.Data exposing (..)
 import Internal.State exposing (..)
 import Internal.Util exposing (..)
 import Monocle.Lens exposing (Lens)
+import Table.Types exposing (Action(..))
 
 
-view : Config a b msg -> Pipe msg -> Pipe msg -> State -> List (Html msg)
-view (Config cfg) pipeExt pipeInt state =
+view : Config a b msg -> (Action -> Pipe msg) -> State -> List (Html msg)
+view (Config cfg) pipe state =
     [ case cfg.pagination of
         ByPage { capabilities } ->
-            toolbarMenuPagination pipeExt pipeInt state capabilities
+            toolbarMenuPagination pipe state capabilities
 
         _ ->
             text ""
-    , toolbarMenuColumns cfg.table.columns pipeInt state
+    , toolbarMenuColumns cfg.table.columns pipe state
     , case cfg.subtable of
         Just (SubTable _ conf) ->
-            toolbarMenuSubColumns conf.columns pipeInt state
+            toolbarMenuSubColumns conf.columns pipe state
 
         Nothing ->
             text ""
     ]
 
 
-toolbarMenuPagination : Pipe msg -> Pipe msg -> State -> List Int -> Html msg
-toolbarMenuPagination pipeExt pipeInt state capabilities =
+toolbarMenuPagination : (Action -> Pipe msg) -> State -> List Int -> Html msg
+toolbarMenuPagination pipe state capabilities =
     toolbarMenuDropdown
         "grt-icon-stories"
         "Pagination"
-        (pipeInt <|
+        (pipe OpenMenu <|
             \s ->
                 { s
                     | btPagination = not s.btPagination
@@ -46,7 +47,7 @@ toolbarMenuPagination pipeExt pipeInt state capabilities =
             (\i ->
                 a
                     [ class "dropdown-item"
-                    , onClick (pipeExt <| \s -> { s | byPage = i })
+                    , onClick (pipe ChangePageIndex <| \s -> { s | byPage = i })
                     ]
                     [ text (String.fromInt i)
                     , iff (i == state.byPage)
@@ -58,12 +59,12 @@ toolbarMenuPagination pipeExt pipeInt state capabilities =
         )
 
 
-toolbarMenuColumns : List (Column a msg) -> Pipe msg -> State -> Html msg
-toolbarMenuColumns columns pipeInt state =
+toolbarMenuColumns : List (Column a msg) -> (Action -> Pipe msg) -> State -> Html msg
+toolbarMenuColumns columns pipe state =
     toolbarMenuDropdown
         "gg-menu-grid-r"
         "Columns"
-        (pipeInt <|
+        (pipe OpenMenu <|
             \s ->
                 { s
                     | btColumns = not s.btColumns
@@ -72,17 +73,17 @@ toolbarMenuColumns columns pipeInt state =
                 }
         )
         state.btColumns
-        (List.filterMap (dropdownItem pipeInt state lensTable) <|
+        (List.filterMap (dropdownItem pipe state lensTable) <|
             List.map (\(Column c) -> ( c.name, c.hiddable )) columns
         )
 
 
-toolbarMenuSubColumns : List (Column a msg) -> Pipe msg -> State -> Html msg
-toolbarMenuSubColumns columns pipeInt state =
+toolbarMenuSubColumns : List (Column a msg) -> (Action -> Pipe msg) -> State -> Html msg
+toolbarMenuSubColumns columns pipe state =
     toolbarMenuDropdown
         "gg-layout-grid-small"
         "Columns of subtable"
-        (pipeInt <|
+        (pipe OpenMenu <|
             \s ->
                 { s
                     | btSubColumns = not s.btSubColumns
@@ -92,14 +93,14 @@ toolbarMenuSubColumns columns pipeInt state =
         )
         state.btSubColumns
         (List.filterMap
-            (dropdownItem pipeInt state lensSubTable)
+            (dropdownItem pipe state lensSubTable)
          <|
             List.map (\(Column c) -> ( c.name, c.hiddable )) columns
         )
 
 
-dropdownItem : Pipe msg -> State -> Lens State StateTable -> ( String, Bool ) -> Maybe (Html msg)
-dropdownItem pipeInt state lens ( name, hiddable ) =
+dropdownItem : (Action -> Pipe msg) -> State -> Lens State StateTable -> ( String, Bool ) -> Maybe (Html msg)
+dropdownItem pipe state lens ( name, hiddable ) =
     let
         stateTable =
             lens.get state
@@ -113,7 +114,7 @@ dropdownItem pipeInt state lens ( name, hiddable ) =
                 (name :: stateTable.visible)
 
         msg =
-            pipeInt <| \s -> lens.set { stateTable | visible = visible } s
+            pipe ShowColumn <| \s -> lens.set { stateTable | visible = visible } s
     in
     iff hiddable
         (Just

@@ -7,7 +7,7 @@ import Internal.Data exposing (..)
 import Internal.State exposing (..)
 import Internal.Util exposing (..)
 import Monocle.Lens exposing (Lens)
-import Table.Types exposing (Sort(..))
+import Table.Types exposing (Action(..), Sort(..))
 
 
 type alias Pipe msg =
@@ -15,11 +15,11 @@ type alias Pipe msg =
 
 
 type alias ViewCell a msg =
-    a -> ( State, Pipe msg ) -> List (Html msg)
+    a -> (Action -> Pipe msg) -> State -> List (Html msg)
 
 
 type alias ViewHeader a msg =
-    Column a msg -> ( State, Pipe msg ) -> List (Html msg)
+    Column a msg -> (Action -> Pipe msg) -> State -> List (Html msg)
 
 
 type Column a msg
@@ -116,7 +116,7 @@ int get name abbrev =
         , searchable = Just (String.fromInt << get)
         , visible = True
         , hiddable = True
-        , viewCell = \x _ -> [ text <| String.fromInt (get x) ]
+        , viewCell = \x _ _ -> [ text <| String.fromInt (get x) ]
         , viewHeader = viewHeader
         , default = True
         }
@@ -133,7 +133,7 @@ string get name abbrev =
         , searchable = Just get
         , visible = True
         , hiddable = True
-        , viewCell = \x _ -> [ text (get x) ]
+        , viewCell = \x _ _ -> [ text (get x) ]
         , viewHeader = viewHeader
         , default = True
         }
@@ -150,7 +150,7 @@ bool get name abbrev =
         , searchable = Nothing
         , visible = True
         , hiddable = True
-        , viewCell = \x _ -> [ text <| iff (get x) "☑" "☐" ]
+        , viewCell = \x _ _ -> [ text <| iff (get x) "☑" "☐" ]
         , viewHeader = viewHeader
         , default = True
         }
@@ -167,7 +167,7 @@ float get name abbrev =
         , searchable = Just (String.fromFloat << get)
         , visible = True
         , hiddable = True
-        , viewCell = \x _ -> [ text <| String.fromFloat (get x) ]
+        , viewCell = \x _ _ -> [ text <| String.fromFloat (get x) ]
         , viewHeader = viewHeader
         , default = True
         }
@@ -184,14 +184,14 @@ clipboard get name abbrev =
         , searchable = Just get
         , visible = True
         , hiddable = True
-        , viewCell = viewClipboard << get
+        , viewCell = viewClipboard
         , viewHeader = viewHeader
         , default = True
         }
 
 
-expand : Pipe msg -> Lens State StateTable -> (a -> String) -> Column a msg
-expand pipe lens getID =
+expand : Lens State StateTable -> (a -> String) -> Column a msg
+expand lens getID =
     Column
         { name = ""
         , abbrev = ""
@@ -201,14 +201,14 @@ expand pipe lens getID =
         , searchable = Nothing
         , visible = True
         , hiddable = False
-        , viewCell = \v ( s, _ ) -> viewExpand lens getID v ( s, pipe )
+        , viewCell = viewExpand lens getID
         , viewHeader = viewHeader
         , default = True
         }
 
 
-subtable : (a -> Bool) -> Pipe msg -> Lens State StateTable -> (a -> String) -> Column a msg
-subtable isDisable pipe lens getID =
+subtable : (a -> Bool) -> Lens State StateTable -> (a -> String) -> Column a msg
+subtable isDisable lens getID =
     Column
         { name = ""
         , abbrev = ""
@@ -218,14 +218,14 @@ subtable isDisable pipe lens getID =
         , searchable = Nothing
         , visible = True
         , hiddable = False
-        , viewCell = \v ( s, _ ) -> viewSubtable isDisable lens getID v ( s, pipe )
+        , viewCell = viewSubtable isDisable lens getID
         , viewHeader = viewHeader
         , default = True
         }
 
 
-viewExpand : Lens State StateTable -> (a -> String) -> a -> ( State, Pipe msg ) -> List (Html msg)
-viewExpand lens getID v ( state, pipe ) =
+viewExpand : Lens State StateTable -> (a -> String) -> ViewCell a msg
+viewExpand lens getID v pipe state =
     let
         id =
             getID v
@@ -241,14 +241,14 @@ viewExpand lens getID v ( state, pipe ) =
     in
     [ a
         [ class "btn-expand"
-        , onClick <| pipe <| \s -> lens.set { conf | expanded = updatedExpand } s
+        , onClick <| pipe Expand <| \s -> lens.set { conf | expanded = updatedExpand } s
         ]
         [ span [ class <| iff isExpanded "gg-collapse" "gg-expand" ] [] ]
     ]
 
 
-viewSubtable : (a -> Bool) -> Lens State StateTable -> (a -> String) -> a -> ( State, Pipe msg ) -> List (Html msg)
-viewSubtable isDisable lens getID v ( state, pipe ) =
+viewSubtable : (a -> Bool) -> Lens State StateTable -> (a -> String) -> ViewCell a msg
+viewSubtable isDisable lens getID v pipe state =
     if isDisable v then
         [ a [ class "btn-subtable is-disabled", disabled True ]
             [ span [ class "gg-plus" ] [] ]
@@ -270,14 +270,14 @@ viewSubtable isDisable lens getID v ( state, pipe ) =
         in
         [ a
             [ class "btn-subtable"
-            , onClick <| pipe <| \s -> lens.set { conf | subtable = updatedExpand } s
+            , onClick <| pipe ShowSubtable <| \s -> lens.set { conf | subtable = updatedExpand } s
             ]
             [ span [ class <| iff isExpanded "gg-minus" "gg-plus" ] [] ]
         ]
 
 
-viewHeader : Column a msg -> ( State, Pipe msg ) -> List (Html msg)
-viewHeader (Column col) ( state, pipe ) =
+viewHeader : ViewHeader a msg
+viewHeader (Column col) pipe state =
     [ iff (String.isEmpty col.abbrev)
         (span [] [ text col.name ])
         (abbr [ title col.name ] [ text col.abbrev ])
@@ -285,7 +285,7 @@ viewHeader (Column col) ( state, pipe ) =
         (iff (state.orderBy == Just col.name)
             (a
                 [ class "sort"
-                , onClick <| pipe <| \s -> { s | order = next s.order }
+                , onClick <| pipe SortColumn <| \s -> { s | order = next s.order }
                 ]
                 [ text <|
                     case state.order of
@@ -301,7 +301,7 @@ viewHeader (Column col) ( state, pipe ) =
             )
             (a
                 [ class "sort"
-                , onClick <| pipe <| \s -> { s | order = Ascending, orderBy = Just col.name }
+                , onClick <| pipe SortColumn <| \s -> { s | order = Ascending, orderBy = Just col.name }
                 ]
                 [ text "⇅" ]
             )
@@ -310,7 +310,7 @@ viewHeader (Column col) ( state, pipe ) =
     ]
 
 
-viewClipboard : String -> ( State, Pipe msg ) -> List (Html msg)
-viewClipboard _ _ =
+viewClipboard : a -> (Action -> Pipe msg) -> State -> List (Html msg)
+viewClipboard _ _ _ =
     -- TODO
     [ div [] [ text "📋" ] ]

@@ -71,27 +71,24 @@ init (Config cfg) =
 view : Config a b msg -> Model a -> Html msg
 view config ((Model m) as model) =
     let
-        pipeInt =
-            pipeInternal config model
-
-        pipeExt =
-            pipeExternal config model
+        pipe =
+            pipeFn config model
     in
     div [ class "grt-main" ] <|
         case m.rows of
             Rows Loading ->
-                [ tableHeader config pipeExt pipeInt m.state
+                [ tableHeader config pipe m.state
                 , div [ class "grt-spinner" ] [ span [ class "grt-icon-spinner" ] [] ]
                 ]
 
             Rows (Loaded { total, rows }) ->
-                [ tableHeader config pipeExt pipeInt m.state
-                , tableContent config pipeExt pipeInt m.state rows
-                , tableFooter config pipeExt pipeInt m.state total
+                [ tableHeader config pipe m.state
+                , tableContent config pipe m.state rows
+                , tableFooter config pipe m.state total
                 ]
 
             Rows (Failed msg) ->
-                [ tableHeader config pipeExt pipeInt m.state, errorView msg ]
+                [ tableHeader config pipe m.state, errorView msg ]
 
 
 
@@ -100,24 +97,25 @@ view config ((Model m) as model) =
 --
 
 
-tableHeader : Config a b msg -> Pipe msg -> Pipe msg -> State -> Html msg
-tableHeader ((Config cfg) as config) pipeExt pipeInt state =
+tableHeader : Config a b msg -> (Action -> Pipe msg) -> State -> Html msg
+tableHeader ((Config cfg) as config) pipe state =
     div [ class "grt-table-header" ]
-        [ div [ class "header-search" ] <| headerSearch pipeExt pipeInt
+        [ div [ class "header-search" ] <| headerSearch pipe state.search
         , div [ class "header-custom" ] cfg.toolbar
-        , div [ class "header-toolbar" ] <| Internal.Toolbar.view config pipeExt pipeInt state
+        , div [ class "header-toolbar" ] <| Internal.Toolbar.view config pipe state
         ]
 
 
-headerSearch : Pipe msg -> Pipe msg -> List (Html msg)
-headerSearch pipeExt pipeInt =
+headerSearch : (Action -> Pipe msg) -> String -> List (Html msg)
+headerSearch pipe v =
     [ input
         [ class "input"
         , type_ "text"
         , placeholder "Search..."
+        , value v
         , onInput
             (\s ->
-                pipeInt <|
+                pipe SearchInput <|
                     \state ->
                         { state
                             | search = s
@@ -128,8 +126,8 @@ headerSearch pipeExt pipeInt =
         , onKeyDown
             (\i ->
                 iff (i == 13)
-                    (pipeExt <| \state -> { state | search = state.search })
-                    (pipeExt <| \state -> state)
+                    (pipe SearchEnter <| \state -> { state | search = state.search })
+                    (pipe SearchInput <| \state -> state)
             )
         ]
         []
@@ -143,22 +141,22 @@ headerSearch pipeExt pipeInt =
 --
 
 
-tableContent : Config a b msg -> Pipe msg -> Pipe msg -> State -> List (Row a) -> Html msg
-tableContent ((Config cfg) as config) pipeExt pipeInt state rows =
+tableContent : Config a b msg -> (Action -> Pipe msg) -> State -> List (Row a) -> Html msg
+tableContent ((Config cfg) as config) pipe state rows =
     let
         expandColumn =
-            ifMaybe (cfg.table.expand /= Nothing) (expand pipeInt lensTable cfg.table.getID)
+            ifMaybe (cfg.table.expand /= Nothing) (expand lensTable cfg.table.getID)
 
         subtableColumn =
             case cfg.subtable of
                 Just (SubTable get _) ->
-                    Just <| subtable (get >> List.isEmpty) pipeInt lensTable cfg.table.getID
+                    Just <| subtable (get >> List.isEmpty) lensTable cfg.table.getID
 
                 _ ->
                     Nothing
 
         selectColumn =
-            ifMaybe (cfg.selection /= Disable) (selectionParent pipeInt config rows)
+            ifMaybe (cfg.selection /= Disable) (selectionParent config rows)
 
         visibleColumns =
             List.filter
@@ -212,31 +210,30 @@ tableContent ((Config cfg) as config) pipeExt pipeInt state rows =
     in
     div [ class "table-content" ]
         [ table []
-            [ tableContentHead (cfg.selection /= Disable) pipeExt pipeInt columns state
-            , tableContentBody config pipeExt pipeInt columns state prows
+            [ tableContentHead (cfg.selection /= Disable) pipe columns state
+            , tableContentBody config pipe columns state prows
             ]
         ]
 
 
 tableContentHead :
     Bool
-    -> Pipe msg
-    -> Pipe msg
+    -> (Action -> Pipe msg)
     -> List (Column a msg)
     -> State
     -> Html msg
-tableContentHead hasSelection pipeExt pipeInt columns state =
+tableContentHead hasSelection pipe columns state =
     thead []
         [ tr [] <|
             List.indexedMap
                 (\i ((Column c) as col) ->
                     if i == 0 && hasSelection then
                         th [ style "width" c.width ] <|
-                            c.viewHeader col ( state, pipeInt )
+                            c.viewHeader col pipe state
 
                     else
                         th [ style "width" c.width ] <|
-                            c.viewHeader col ( state, pipeExt )
+                            c.viewHeader col pipe state
                 )
                 columns
         ]
@@ -244,37 +241,35 @@ tableContentHead hasSelection pipeExt pipeInt columns state =
 
 tableContentBody :
     Config a b msg
-    -> Pipe msg
-    -> Pipe msg
+    -> (Action -> Pipe msg)
     -> List (Column a msg)
     -> State
     -> List (Row a)
     -> Html msg
-tableContentBody config pipeExt pipeInt columns state rows =
-    tbody [] <| List.concat (List.map (tableContentBodyRow config pipeExt pipeInt columns state) rows)
+tableContentBody config pipe columns state rows =
+    tbody [] <| List.concat (List.map (tableContentBodyRow config pipe columns state) rows)
 
 
 tableContentBodyRow :
     Config a b msg
-    -> Pipe msg
-    -> Pipe msg
+    -> (Action -> Pipe msg)
     -> List (Column a msg)
     -> State
     -> Row a
     -> List (Html msg)
-tableContentBodyRow ((Config cfg) as config) pipeExt pipeInt columns state (Row r) =
+tableContentBodyRow ((Config cfg) as config) pipe columns state (Row r) =
     [ tr [] <|
         List.map
             (\(Column c) ->
                 td [ class c.class, style "width" c.width ] <|
-                    c.viewCell r ( state, pipeExt )
+                    c.viewCell r pipe state
             )
             columns
     , case ( cfg.table.expand, List.member (cfg.table.getID r) state.table.expanded ) of
         ( Just (Column c), True ) ->
             tr []
                 [ td [ colspan (List.length columns) ] <|
-                    c.viewCell r ( state, pipeExt )
+                    c.viewCell r pipe state
                 ]
 
         _ ->
@@ -284,8 +279,7 @@ tableContentBodyRow ((Config cfg) as config) pipeExt pipeInt columns state (Row 
             tr []
                 [ td [ colspan (List.length columns) ]
                     [ subtableContent config
-                        pipeExt
-                        pipeInt
+                        pipe
                         (cfg.table.getID r)
                         conf
                         state
@@ -300,23 +294,22 @@ tableContentBodyRow ((Config cfg) as config) pipeExt pipeInt columns state (Row 
 
 subtableContent :
     Config a b msg
-    -> Pipe msg
-    -> Pipe msg
+    -> (Action -> Pipe msg)
     -> RowID
     -> ConfTable b msg
     -> State
     -> List b
     -> Html msg
-subtableContent ((Config cfg) as config) pipeExt pipeInt parent subConfig state data =
+subtableContent ((Config cfg) as config) pipe parent subConfig state data =
     let
         expandColumn =
-            ifMaybe (subConfig.expand /= Nothing) (expand pipeInt lensTable subConfig.getID)
+            ifMaybe (subConfig.expand /= Nothing) (expand lensTable subConfig.getID)
 
         rows =
             List.map Row data
 
         selectColumn =
-            ifMaybe (cfg.selection /= Disable) (selectionChild pipeInt config rows parent)
+            ifMaybe (cfg.selection /= Disable) (selectionChild config rows parent)
 
         visibleColumns =
             List.filter
@@ -330,41 +323,41 @@ subtableContent ((Config cfg) as config) pipeExt pipeInt parent subConfig state 
     in
     div [ class "subtable-content" ]
         [ table []
-            [ tableContentHead (cfg.selection /= Disable) pipeInt pipeExt columns state
-            , subtableContentBody pipeExt subConfig columns state rows
+            [ tableContentHead (cfg.selection /= Disable) pipe columns state
+            , subtableContentBody pipe subConfig columns state rows
             ]
         ]
 
 
 subtableContentBody :
-    Pipe msg
+    (Action -> Pipe msg)
     -> ConfTable a msg
     -> List (Column a msg)
     -> State
     -> List (Row a)
     -> Html msg
-subtableContentBody pipeExt cfg columns state rows =
-    tbody [] <| List.concat (List.map (subtableContentBodyRow pipeExt cfg columns state) rows)
+subtableContentBody pipe cfg columns state rows =
+    tbody [] <| List.concat (List.map (subtableContentBodyRow pipe cfg columns state) rows)
 
 
 subtableContentBodyRow :
-    Pipe msg
+    (Action -> Pipe msg)
     -> ConfTable a msg
     -> List (Column a msg)
     -> State
     -> Row a
     -> List (Html msg)
-subtableContentBodyRow pipeExt cfg columns state (Row r) =
+subtableContentBodyRow pipe cfg columns state (Row r) =
     [ tr [] <|
         List.map
             (\(Column c) ->
-                td [ class c.class, style "width" c.width ] <| c.viewCell r ( state, pipeExt )
+                td [ class c.class, style "width" c.width ] <| c.viewCell r pipe state
             )
             columns
     , case ( cfg.expand, List.member (cfg.getID r) state.subtable.expanded ) of
         ( Just (Column c), True ) ->
             tr []
-                [ td [ colspan (List.length columns) ] <| c.viewCell r ( state, pipeExt )
+                [ td [ colspan (List.length columns) ] <| c.viewCell r pipe state
                 ]
 
         _ ->
@@ -378,13 +371,13 @@ subtableContentBodyRow pipeExt cfg columns state (Row r) =
 --
 
 
-tableFooter : Config a b msg -> Pipe msg -> Pipe msg -> State -> Int -> Html msg
-tableFooter (Config cfg) pipeExt pipeInt state total =
+tableFooter : Config a b msg -> (Action -> Pipe msg) -> State -> Int -> Html msg
+tableFooter (Config cfg) pipe state total =
     if cfg.pagination == None then
         text ""
 
     else
-        tableFooterContent cfg.type_ pipeInt pipeExt state.byPage state.page total
+        tableFooterContent pipe state.byPage state.page total
 
 
 
