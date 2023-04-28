@@ -87,3 +87,8 @@ selected (Model { state }) =
 subSelected : Model a -> List RowID
 subSelected (Model { state }) =
     Internal.State.subSelected state
+
+
+setPagination : Model a -> Pagination -> Model a
+setPagination (Model { state, rows }) p =
+    Model { state = Internal.State.setPagination state p, rows = rows }

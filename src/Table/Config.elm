@@ -4,7 +4,7 @@ module Table.Config exposing
     , withExpand, withSelection, withSelectionFree, withSelectionLinked
     , withSelectionLinkedStrict, withSelectionExclusive
     , withSelectionExclusiveStrict, withPagination, withProgressiveLoading
-    , withToolbar, withErrorView, withSubtable
+    , withToolbar, withErrorView, withSubtable, withActions
     )
 
 {-| Configuration of the table.
@@ -22,7 +22,7 @@ module Table.Config exposing
 @docs withExpand, withSelection, withSelectionFree, withSelectionLinked
 @docs withSelectionLinkedStrict, withSelectionExclusive
 @docs withSelectionExclusiveStrict, withPagination, withProgressiveLoading
-@docs withToolbar, withErrorView, withSubtable
+@docs withToolbar, withErrorView, withSubtable, withActions
 
 -}
 
@@ -60,6 +60,28 @@ dynamic =
 withExpand : Column a msg -> Config a b msg -> Config a b msg
 withExpand =
     Internal.Config.withExpand
+
+
+{-| Configure how the internal actions which will be process (by internal or external messages).
+This function is usefull only for the dynamic table.
+
+Example:
+
+    Table.dynamic
+        OnTableExternal
+        OnTableInternal
+        .id
+        columns
+        |> Config.withActions [ SearchEnter, ChangeByPage, ChangePageIndex, SortColumn ]
+
+In this example the actions `SearchEnter`, `ChangeByPage`, `ChangePageIndex`, `SortColumn` will
+be send through the `OnTableExternal` message and all other actions will be send through
+the `OnTableInternal` message.
+
+-}
+withActions : List Action -> Config a b msg -> Config a b msg
+withActions =
+    Internal.Config.withActions
 
 
 {-| Enable the selection (see `Selection` type for the different logics).

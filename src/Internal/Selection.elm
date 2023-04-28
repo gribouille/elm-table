@@ -18,8 +18,8 @@ import Table.Types exposing (..)
 --
 
 
-selectionParent : Pipe msg -> Config a b msg -> List (Row a) -> Column a msg
-selectionParent pipe config rows =
+selectionParent : Config a b msg -> List (Row a) -> Column a msg
+selectionParent config rows =
     Column
         { name = ""
         , abbrev = ""
@@ -29,30 +29,30 @@ selectionParent pipe config rows =
         , searchable = Nothing
         , visible = True
         , hiddable = False
-        , viewCell = \v ( s, _ ) -> viewParentCell config rows v ( s, pipe )
-        , viewHeader = \c ( s, _ ) -> viewParentHeader config rows c ( s, pipe )
+        , viewCell = viewParentCell config rows
+        , viewHeader = viewParentHeader config rows
         , default = True
         }
 
 
-viewParentHeader : Config a b msg -> List (Row a) -> Column a msg -> ( State, Pipe msg ) -> List (Html msg)
-viewParentHeader config rows _ ( state, pipe ) =
+viewParentHeader : Config a b msg -> List (Row a) -> ViewHeader a msg
+viewParentHeader config rows _ pipe _ =
     [ input
         [ class "checkbox"
         , type_ "checkbox"
-        , onCheck (\b -> pipe <| \s -> logicParentHeader config rows s b)
+        , onCheck (\b -> pipe SelectColumn <| \s -> logicParentHeader config rows s b)
         ]
         []
     ]
 
 
-viewParentCell : Config a b msg -> List (Row a) -> a -> ( State, Pipe msg ) -> List (Html msg)
-viewParentCell ((Config cfg) as config) rows value ( state, pipe ) =
+viewParentCell : Config a b msg -> List (Row a) -> ViewCell a msg
+viewParentCell ((Config cfg) as config) rows value pipe state =
     [ input
         [ class "checkbox"
         , type_ "checkbox"
         , checked (List.member (cfg.table.getID value) state.table.selected)
-        , onCheck (\b -> pipe <| \s -> logicParentCell config rows value s b)
+        , onCheck (\b -> pipe SelectRow <| \s -> logicParentCell config rows value s b)
         ]
         []
     ]
@@ -162,8 +162,8 @@ linkedState conf getValues value subSelected updatedSelected check state =
 --
 
 
-selectionChild : Pipe msg -> Config a b msg -> List (Row b) -> RowID -> Column b msg
-selectionChild pipe config rows id =
+selectionChild : Config a b msg -> List (Row b) -> RowID -> Column b msg
+selectionChild config rows id =
     Column
         { name = ""
         , abbrev = ""
@@ -173,20 +173,20 @@ selectionChild pipe config rows id =
         , searchable = Nothing
         , visible = True
         , hiddable = False
-        , viewCell = \v ( s, _ ) -> viewChildCell config rows id v ( s, pipe )
-        , viewHeader = \c ( s, _ ) -> viewChildHeader config rows id c ( s, pipe )
+        , viewCell = viewChildCell config rows id
+        , viewHeader = viewChildHeader config rows id
         , default = True
         }
 
 
-viewChildHeader : Config a b msg -> List (Row b) -> RowID -> Column b msg -> ( State, Pipe msg ) -> List (Html msg)
-viewChildHeader ((Config cfg) as config) rows id _ ( state, pipe ) =
+viewChildHeader : Config a b msg -> List (Row b) -> RowID -> ViewHeader b msg
+viewChildHeader ((Config cfg) as config) rows id _ pipe _ =
     case cfg.subtable of
         Just (SubTable _ conf) ->
             [ input
                 [ class "checkbox"
                 , type_ "checkbox"
-                , onCheck (\b -> pipe <| \s -> logicChildHeader id config conf rows s b)
+                , onCheck (\b -> pipe SelectColumn <| \s -> logicChildHeader id config conf rows s b)
                 , disabled (cfg.selection == LinkedStrict)
                 ]
                 []
@@ -196,15 +196,15 @@ viewChildHeader ((Config cfg) as config) rows id _ ( state, pipe ) =
             []
 
 
-viewChildCell : Config a b msg -> List (Row b) -> RowID -> b -> ( State, Pipe msg ) -> List (Html msg)
-viewChildCell ((Config cfg) as config) rows id value ( state, pipe ) =
+viewChildCell : Config a b msg -> List (Row b) -> RowID -> ViewCell b msg
+viewChildCell ((Config cfg) as config) rows id value pipe state =
     case cfg.subtable of
         Just (SubTable _ conf) ->
             [ input
                 [ class "checkbox"
                 , type_ "checkbox"
                 , checked (List.member (conf.getID value) state.subtable.selected)
-                , onCheck (\check -> pipe <| \s -> logicChildCell id config conf rows value s check)
+                , onCheck (\check -> pipe SelectRow <| \s -> logicChildCell id config conf rows value s check)
                 , disabled (cfg.selection == LinkedStrict)
                 ]
                 []

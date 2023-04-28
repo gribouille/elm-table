@@ -1,8 +1,8 @@
-module Table.Types exposing (Selection(..), Type(..), Sort(..), Status(..))
+module Table.Types exposing (Selection(..), Type(..), Sort(..), Status(..), Action(..))
 
 {-| Common types.
 
-@docs Selection, Type, Sort, Status
+@docs Selection, Type, Sort, Status, Action
 
 -}
 
@@ -72,3 +72,36 @@ type Status a
     = Loading
     | Loaded a
     | Failed String
+
+
+{-| List of internal action:
+
+  - `SearchInput`: input character in the search input text
+  - `SearchEnter`: enter key down in the search input text
+  - `ChangeByPage`: change the number of items by page
+  - `ChangePageIndex`: change the page number
+  - `ShowColumn`: show/hide column
+  - `ShowSubColumn`: show/hide sub column
+  - `Expand`: expand a row
+  - `ShowSubtable`: show the subtable
+  - `SortColumn`: sort a column
+  - `SortSubColumn`: sort a sub column
+  - `SelectColumn`: check all row
+  - `SelectRow`: check one row
+  - `OpenMenu`: open a dropdown menu
+
+-}
+type Action
+    = SearchInput
+    | SearchEnter
+    | ChangeByPage
+    | ChangePageIndex
+    | ShowColumn
+    | ShowSubColumn
+    | Expand
+    | ShowSubtable
+    | SortColumn
+    | SortSubColumn
+    | SelectColumn
+    | SelectRow
+    | OpenMenu
