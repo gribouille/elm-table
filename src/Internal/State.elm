@@ -1,5 +1,6 @@
 module Internal.State exposing (..)
 
+import Internal.Util exposing (iff)
 import Monocle.Lens exposing (Lens, compose)
 import Table.Types exposing (Sort(..))
 
@@ -88,3 +89,14 @@ pagination state =
         state.order
         state.page
         state.byPage
+
+
+setPagination : State -> Pagination -> State
+setPagination state p =
+    { state
+        | search = p.search
+        , orderBy = iff (String.isEmpty p.orderBy) Nothing (Just p.orderBy)
+        , order = p.order
+        , page = p.page
+        , byPage = p.byPage
+    }
